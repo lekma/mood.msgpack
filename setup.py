@@ -47,7 +47,7 @@ setup(
       keywords="messagepack msgpack",
 
       setup_requires = ["setuptools>=24.2.0"],
-      python_requires="~=3.5.2",
+      python_requires="~=3.5",
       packages=find_packages(),
       namespace_packages=["mood"],
       zip_safe=False,
