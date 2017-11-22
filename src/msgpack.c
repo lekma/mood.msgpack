@@ -287,7 +287,7 @@ _register_obj(PyObject *registry, PyObject *obj)
  ---------------------------------------------------------------------------- */
 
 #define __pack__(m, s, b) \
-    __PyByteArray_Grow(((PyByteArrayObject *)(m)), (s), (b))
+    __PyByteArray_Grow(((PyByteArrayObject *)(m)), (s), (b), _Py_MIN_ALLOC)
 
 #define __pack_msg__(m, t, s, b) \
     __pack_type((m), (t)) ? -1 : __pack__((m), (s), (b))
