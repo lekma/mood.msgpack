@@ -27,6 +27,7 @@
 #define _PY_INLINE_HELPERS
 #define _Py_MIN_ALLOC 32
 #include "helpers/helpers.h"
+#include "helpers/msgpack_capi.h"
 
 
 /* endian.h is the POSIX way(?) */
@@ -64,9 +65,27 @@ typedef union {
 
 typedef struct {
     PyObject *registry;
+    msgpack_capi capi;
 } msgpack_state;
 
 #define msgpack_getstate() (msgpack_state *)_PyModuleDef_GetState(&msgpack_def)
+
+
+static int
+_init_capi(PyObject *module, msgpack_state *state)
+{
+    PyObject *capi = NULL;
+    int res = -1;
+
+    state->capi.pack = _pack_obj;
+
+    if ((capi = PyCapsule_New((void *)&state->capi,
+                              _MSGPACK_CAPSULE_NAME, NULL)) &&
+        (res = PyModule_AddObject(module, _MSGPACK_CAPI_NAME, capi))) {
+        Py_DECREF(capi);
+    }
+    return res;
+}
 
 
 static int
@@ -84,7 +103,7 @@ _init_state(PyObject *module)
        ) {
         return -1;
     }
-    return 0;
+    return _init_capi(module, state);
 }
 
 
