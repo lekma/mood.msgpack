@@ -65,7 +65,7 @@ typedef union {
 
 typedef struct {
     PyObject *registry;
-    msgpack_capi capi;
+    _Py_msgpack_CAPI CAPI;
 } msgpack_state;
 
 #define msgpack_getstate() (msgpack_state *)_PyModuleDef_GetState(&msgpack_def)
@@ -74,15 +74,15 @@ typedef struct {
 static int
 _init_capi(PyObject *module, msgpack_state *state)
 {
-    PyObject *capi = NULL;
+    PyObject *CAPI = NULL;
     int res = -1;
 
-    state->capi.pack = _pack_obj;
+    state->CAPI.pack = _pack_obj;
 
-    if ((capi = PyCapsule_New((void *)&state->capi,
+    if ((CAPI = PyCapsule_New((void *)&state->CAPI,
                               _MSGPACK_CAPSULE_NAME, NULL)) &&
-        (res = PyModule_AddObject(module, _MSGPACK_CAPI_NAME, capi))) {
-        Py_DECREF(capi);
+        (res = PyModule_AddObject(module, _MSGPACK_CAPI_NAME, CAPI))) {
+        Py_DECREF(CAPI);
     }
     return res;
 }
