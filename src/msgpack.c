@@ -44,6 +44,8 @@
 static PyModuleDef msgpack_def;
 static int _register_obj(PyObject *registry, PyObject *obj);
 static int _pack_obj(PyObject *msg, PyObject *obj);
+static int _pack_len(PyObject *msg, uint8_t type, Py_ssize_t len);
+static Py_ssize_t _type_size(uint8_t type);
 static PyObject *_unpack_msg(Py_buffer *msg, Py_ssize_t *off);
 
 
@@ -77,7 +79,9 @@ _init_capi(PyObject *module, msgpack_state *state)
     PyObject *CAPI = NULL;
     int res = -1;
 
-    state->CAPI.pack = _pack_obj;
+    state->CAPI.pack_obj = _pack_obj;
+    state->CAPI.pack_len = _pack_len;
+    state->CAPI.type_size = _type_size;
 
     if ((CAPI = PyCapsule_New((void *)&state->CAPI,
                               _MSGPACK_CAPSULE_NAME, NULL)) &&
@@ -139,9 +143,10 @@ enum {
     _MSGPACK_FIXSTR      = 0xa0,
     _MSGPACK_FIXSTREND   = 0xbf,
 
-    _MSGPACK_NIL   = 0xc0,
-    _MSGPACK_FALSE = 0xc2,
-    _MSGPACK_TRUE  = 0xc3,
+    _MSGPACK_NIL     = 0xc0,
+    _MSGPACK_INVALID = 0xc1,
+    _MSGPACK_FALSE   = 0xc2,
+    _MSGPACK_TRUE    = 0xc3,
 
     _MSGPACK_BIN8  = 0xc4,
     _MSGPACK_BIN16 = 0xc5,
@@ -463,9 +468,16 @@ _pack_check_len(PyObject *obj, Py_ssize_t len)
     if (len < _MSGPACK_UINT32_MAX) {
         return 0;
     }
-    PyErr_Format(PyExc_OverflowError, "%.200s too long to convert",
-                 Py_TYPE(obj)->tp_name);
+    PyErr_Format(PyExc_OverflowError,
+                 "%.200s too long to convert", Py_TYPE(obj)->tp_name);
     return -1;
+}
+
+
+static int
+_pack_len(PyObject *msg, uint8_t type, Py_ssize_t len)
+{
+    return __pack_len(msg, type, len);
 }
 
 
@@ -485,7 +497,7 @@ _pack_long(PyObject *msg, PyObject *obj)
     }
     if (overflow) {
         if (overflow < 0) {
-            PyErr_Format(PyExc_OverflowError, "int too big to convert");
+            PyErr_SetString(PyExc_OverflowError, "int too big to convert");
             return -1;
         }
         uint64_t uvalue = PyLong_AsUnsignedLongLong(obj);
@@ -1003,7 +1015,8 @@ _PySingleton_ErrFromBuffer(Py_buffer *msg, Py_ssize_t *off)
     PyObject *name = NULL;
 
     if ((name = _unpack_msg(msg, off))) {
-        PyErr_Format(PyExc_TypeError, "cannot unpack '%U'", name);
+        PyErr_Format(PyExc_TypeError,
+                     "cannot unpack '%U'", name);
         Py_DECREF(name);
     }
 }
@@ -1097,8 +1110,7 @@ _PySequence_InPlaceConcatOrAdd(PyObject *self, PyObject *arg)
     }
     if (res && !PyErr_Occurred()) {
         PyErr_Format(PyExc_TypeError,
-                     "cannot extend '%.200s' objects",
-                     Py_TYPE(self)->tp_name);
+                     "cannot extend '%.200s' objects", Py_TYPE(self)->tp_name);
     }
     return res;
 }
@@ -1130,7 +1142,8 @@ _PySequence_Fast(PyObject *obj, Py_ssize_t len, const char *message)
 
     if ((result = PySequence_Fast(obj, message)) &&
         (PySequence_Fast_GET_SIZE(result) != len)) {
-        PyErr_Format(PyExc_ValueError, "expected a sequence of len %zd", len);
+        PyErr_Format(PyExc_ValueError,
+                     "expected a sequence of len %zd", len);
         Py_CLEAR(result);
     }
     return result;
