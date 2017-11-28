@@ -310,24 +310,8 @@ _register_obj(PyObject *registry, PyObject *obj)
  pack
  ---------------------------------------------------------------------------- */
 
-#define __pack__(m, s, b) \
-    __PyByteArray_Grow(((PyByteArrayObject *)(m)), (s), (b), _Py_MIN_ALLOC)
-
-#define __pack_msg__(m, t, s, b) \
-    __pack_type((m), (t)) ? -1 : __pack__((m), (s), (b))
-
-#define __pack_all__(m, t, l, b) \
-    __pack_len((m), (t), (l)) ? -1 : __pack__((m), (l), (b))
-
-
-/* -------------------------------------------------------------------------- */
-
 #define __pack(m, s, b) \
     __pack__((m), (s), ((const char *)(b)))
-
-
-#define __pack_value(m, t, s, b) \
-    __pack_msg__((m), (t), (s), ((const char *)(b)))
 
 
 static inline int
@@ -335,6 +319,14 @@ __pack_type(PyObject *msg, uint8_t type)
 {
     return __pack(msg, 1, &type);
 }
+
+
+#define __pack_msg(m, t, s, b) \
+    __pack_type((m), (t)) ? -1 : __pack__((m), (s), (b))
+
+
+#define __pack_value(m, t, s, b) \
+    __pack_msg((m), (t), (s), ((const char *)(b)))
 
 
 static inline int
@@ -452,12 +444,16 @@ __pack_dict(PyObject *msg, uint8_t type, Py_ssize_t len, PyObject *obj)
 }
 
 
+#define __pack_all(m, t, l, b) \
+    __pack_len((m), (t), (l)) ? -1 : __pack__((m), (l), (b))
+
+
 #define __pack_bytes(m, t, l, b) \
-    (l) ? __pack_all__((m), (t), (l), (b)) : __pack_len((m), (t), (l))
+    (l) ? __pack_all((m), (t), (l), (b)) : __pack_len((m), (t), (l))
 
 
 #define __pack_extension(m, t, l, _t, b) \
-    __pack_len((m), (t), (l)) ? -1 : __pack_msg__((m), (_t), (l), (b))
+    __pack_len((m), (t), (l)) ? -1 : __pack_msg((m), (_t), (l), (b))
 
 
 /* -------------------------------------------------------------------------- */
@@ -465,12 +461,12 @@ __pack_dict(PyObject *msg, uint8_t type, Py_ssize_t len, PyObject *obj)
 static int
 _pack_check_len(PyObject *obj, Py_ssize_t len)
 {
-    if (len < _MSGPACK_UINT32_MAX) {
-        return 0;
+    if (len >= _MSGPACK_UINT32_MAX) {
+        PyErr_Format(PyExc_OverflowError,
+                     "%.200s too long to convert", Py_TYPE(obj)->tp_name);
+        return -1;
     }
-    PyErr_Format(PyExc_OverflowError,
-                 "%.200s too long to convert", Py_TYPE(obj)->tp_name);
-    return -1;
+    return 0;
 }
 
 
