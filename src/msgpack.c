@@ -27,7 +27,6 @@
 #define _PY_INLINE_HELPERS
 #define _Py_MIN_ALLOC 32
 #include "helpers/helpers.h"
-#include "helpers/msgpack_capi.h"
 
 
 /* endian.h is the POSIX way(?) */
@@ -44,8 +43,6 @@
 static PyModuleDef msgpack_def;
 static int _register_obj(PyObject *registry, PyObject *obj);
 static int _pack_obj(PyObject *msg, PyObject *obj);
-static int _pack_len(PyObject *msg, uint8_t type, Py_ssize_t len);
-static Py_ssize_t _type_size(uint8_t type);
 static PyObject *_unpack_msg(Py_buffer *msg, Py_ssize_t *off);
 
 
@@ -67,29 +64,9 @@ typedef union {
 
 typedef struct {
     PyObject *registry;
-    _Py_msgpack_CAPI CAPI;
 } msgpack_state;
 
 #define msgpack_getstate() (msgpack_state *)_PyModuleDef_GetState(&msgpack_def)
-
-
-static int
-_init_capi(PyObject *module, msgpack_state *state)
-{
-    PyObject *CAPI = NULL;
-    int res = -1;
-
-    state->CAPI.pack_obj = _pack_obj;
-    state->CAPI.pack_len = _pack_len;
-    state->CAPI.type_size = _type_size;
-
-    if ((CAPI = PyCapsule_New((void *)&state->CAPI,
-                              _MSGPACK_CAPSULE_NAME, NULL)) &&
-        (res = PyModule_AddObject(module, _MSGPACK_CAPI_NAME, CAPI))) {
-        Py_DECREF(CAPI);
-    }
-    return res;
-}
 
 
 static int
@@ -107,7 +84,7 @@ _init_state(PyObject *module)
        ) {
         return -1;
     }
-    return _init_capi(module, state);
+    return 0;
 }
 
 
@@ -310,6 +287,10 @@ _register_obj(PyObject *registry, PyObject *obj)
  pack
  ---------------------------------------------------------------------------- */
 
+#define __pack__(m, s, b) \
+    __PyByteArray_Grow(((PyByteArrayObject *)(m)), (s), (b), _Py_MIN_ALLOC)
+
+
 #define __pack(m, s, b) \
     __pack__((m), (s), ((const char *)(b)))
 
@@ -467,13 +448,6 @@ _pack_check_len(PyObject *obj, Py_ssize_t len)
         return -1;
     }
     return 0;
-}
-
-
-static int
-_pack_len(PyObject *msg, uint8_t type, Py_ssize_t len)
-{
-    return __pack_len(msg, type, len);
 }
 
 
