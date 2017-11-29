@@ -426,15 +426,15 @@ __pack_dict(PyObject *msg, uint8_t type, Py_ssize_t len, PyObject *obj)
 
 
 #define __pack_all(m, t, l, b) \
-    __pack_len((m), (t), (l)) ? -1 : __pack__((m), (l), (b))
+    (__pack_len((m), (t), (l)) ? -1 : __pack__((m), (l), (b)))
 
 
 #define __pack_bytes(m, t, l, b) \
-    (l) ? __pack_all((m), (t), (l), (b)) : __pack_len((m), (t), (l))
+    ((l) ? __pack_all((m), (t), (l), (b)) : __pack_len((m), (t), (l)))
 
 
 #define __pack_extension(m, t, l, _t, b) \
-    __pack_len((m), (t), (l)) ? -1 : __pack_msg((m), (_t), (l), (b))
+    (__pack_len((m), (t), (l)) ? -1 : __pack_msg((m), (_t), (l), (b)))
 
 
 /* -------------------------------------------------------------------------- */
@@ -1439,6 +1439,108 @@ _unpack_msg(Py_buffer *msg, Py_ssize_t *off)
 
 
 /* ----------------------------------------------------------------------------
+ ipc packing
+ ---------------------------------------------------------------------------- */
+
+static inline PyObject *
+_ipc_pack_obj(PyObject *obj)
+{
+    PyObject *result = NULL;
+
+    if ((result = PyByteArray_FromStringAndSize(NULL, 0)) &&
+        _pack_obj(result, obj)) {
+        Py_CLEAR(result);
+    }
+    return result;
+}
+
+
+static inline PyObject *
+_ipc_pack_all(uint8_t type, Py_ssize_t len, PyObject *bytes)
+{
+    PyObject *result = NULL;
+
+    if ((result = PyByteArray_FromStringAndSize(NULL, 0)) &&
+        __pack_all(result, type, len, PyByteArray_AS_STRING(bytes))) {
+        Py_CLEAR(result);
+    }
+    return result;
+}
+
+
+static inline int
+_ipc_check_len(uint8_t type, Py_ssize_t max, Py_ssize_t len)
+{
+    if (len >= max) {
+        PyErr_Format(PyExc_OverflowError,
+                     "msg too long for ipc type: '0x%02x'", type);
+        return -1;
+    }
+    return 0;
+}
+
+
+static inline PyObject *
+__ipc_pack_any(uint8_t type, Py_ssize_t max, PyObject *obj)
+{
+    PyObject *result = NULL, *bytes = NULL;
+    Py_ssize_t len = 0;
+
+    if ((bytes = _ipc_pack_obj(obj))) {
+        len = Py_SIZE(bytes);
+        if (!_ipc_check_len(type, max, len)) {
+            result = _ipc_pack_all(type, len, bytes);
+        }
+        Py_DECREF(bytes);
+    }
+    return result;
+}
+
+#define _ipc_pack_any(t, o) __ipc_pack_any((t), t##_MAX, (o))
+
+
+static inline uint8_t
+_ipc_get_type(Py_ssize_t len)
+{
+    if (len < _MSGPACK_UINT8_MAX) {
+        return _MSGPACK_UINT8;
+    }
+    if (len < _MSGPACK_UINT16_MAX) {
+        return _MSGPACK_UINT16;
+    }
+    if (len < _MSGPACK_UINT32_MAX) {
+        return _MSGPACK_UINT32;
+    }
+    PyErr_SetString(PyExc_OverflowError, "msg too long to be packed");
+    return _MSGPACK_INVALID;
+}
+
+
+static uint8_t
+_ipc_check_type(uint8_t type, Py_ssize_t len)
+{
+    Py_ssize_t max = 0;
+
+    switch (type) {
+        case _MSGPACK_UINT8:
+            max = _MSGPACK_UINT8_MAX;
+            break;
+        case _MSGPACK_UINT16:
+            max = _MSGPACK_UINT16_MAX;
+            break;
+        case _MSGPACK_UINT32:
+            max = _MSGPACK_UINT32_MAX;
+            break;
+        default:
+            PyErr_Format(PyExc_TypeError,
+                         "invalid ipc type: '0x%02x'", type);
+            return _MSGPACK_INVALID;
+    }
+    return _ipc_check_len(type, max, len) ? _MSGPACK_INVALID : type;
+}
+
+
+/* ----------------------------------------------------------------------------
  module
  ---------------------------------------------------------------------------- */
 
@@ -1511,6 +1613,93 @@ msgpack_instance(PyObject *module, PyObject *reduce)
 }*/
 
 
+/* msgpack.ipc_size() */
+PyDoc_STRVAR(msgpack_ipc_size_doc,
+"ipc_size(type) -> int");
+
+static PyObject *
+msgpack_ipc_size(PyObject *module, PyObject *args)
+{
+    uint8_t type;
+
+    if (!PyArg_ParseTuple(args, "b:ipc_size", &type)) {
+        return NULL;
+    }
+    switch (type) {
+        case _MSGPACK_UINT8:
+        case _MSGPACK_UINT16:
+        case _MSGPACK_UINT32:
+            break;
+        default:
+            return PyErr_Format(PyExc_TypeError,
+                                "invalid ipc type: '0x%02x'", type);
+    }
+    return PyLong_FromSsize_t(_type_size(type));
+}
+
+
+/* msgpack.ipc_pack() */
+PyDoc_STRVAR(msgpack_ipc_pack_doc,
+"ipc_pack(obj[, type]) -> msg");
+
+static PyObject *
+msgpack_ipc_pack(PyObject *module, PyObject *args)
+{
+    PyObject *result = NULL, *obj = NULL, *bytes = NULL;
+    uint8_t type = _MSGPACK_INVALID;
+    Py_ssize_t len = 0;
+
+    if (PyArg_ParseTuple(args, "O|b:ipc_pack", &obj, &type) &&
+        (bytes = _ipc_pack_obj(obj))) {
+        len = Py_SIZE(bytes);
+        if (type == _MSGPACK_INVALID) {
+            type = _ipc_get_type(len);
+        }
+        else {
+            type = _ipc_check_type(type, len);
+        }
+        if (type != _MSGPACK_INVALID) {
+            result = _ipc_pack_all(type, len, bytes);
+        }
+        Py_DECREF(bytes);
+    }
+    return result;
+}
+
+
+/* msgpack.ipc_pack8() */
+PyDoc_STRVAR(msgpack_ipc_pack8_doc,
+"ipc_pack8(obj) -> msg");
+
+static PyObject *
+msgpack_ipc_pack8(PyObject *module, PyObject *obj)
+{
+    return _ipc_pack_any(_MSGPACK_UINT8, obj);
+}
+
+
+/* msgpack.ipc_pack16() */
+PyDoc_STRVAR(msgpack_ipc_pack16_doc,
+"ipc_pack16(obj) -> msg");
+
+static PyObject *
+msgpack_ipc_pack16(PyObject *module, PyObject *obj)
+{
+    return _ipc_pack_any(_MSGPACK_UINT16, obj);
+}
+
+
+/* msgpack.ipc_pack32() */
+PyDoc_STRVAR(msgpack_ipc_pack32_doc,
+"ipc_pack32(obj) -> msg");
+
+static PyObject *
+msgpack_ipc_pack32(PyObject *module, PyObject *obj)
+{
+    return _ipc_pack_any(_MSGPACK_UINT32, obj);
+}
+
+
 /* msgpack_def.m_methods */
 static PyMethodDef msgpack_m_methods[] = {
     {"register", (PyCFunction)msgpack_register,
@@ -1521,6 +1710,16 @@ static PyMethodDef msgpack_m_methods[] = {
      METH_VARARGS, msgpack_unpack_doc},
     /*{"instance", (PyCFunction)msgpack_instance,
      METH_O, msgpack_instance_doc},*/
+    {"ipc_size", (PyCFunction)msgpack_ipc_size,
+     METH_VARARGS, msgpack_ipc_size_doc},
+    {"ipc_pack", (PyCFunction)msgpack_ipc_pack,
+     METH_VARARGS, msgpack_ipc_pack_doc},
+    {"ipc_pack8", (PyCFunction)msgpack_ipc_pack8,
+     METH_O, msgpack_ipc_pack8_doc},
+    {"ipc_pack16", (PyCFunction)msgpack_ipc_pack16,
+     METH_O, msgpack_ipc_pack16_doc},
+    {"ipc_pack32", (PyCFunction)msgpack_ipc_pack32,
+     METH_O, msgpack_ipc_pack32_doc},
     {NULL} /* Sentinel */
 };
 
@@ -1588,6 +1787,9 @@ PyInit_msgpack(void)
              (module = PyModule_Create(&msgpack_def)) &&
              (
               _init_state(module) ||
+              _PyModule_AddUnsignedIntConstant(module, "IPC8", _MSGPACK_UINT8) ||
+              _PyModule_AddUnsignedIntConstant(module, "IPC16", _MSGPACK_UINT16) ||
+              _PyModule_AddUnsignedIntConstant(module, "IPC32", _MSGPACK_UINT32) ||
               PyModule_AddStringConstant(module, "__version__", PKG_VERSION)
              )
             ) {
