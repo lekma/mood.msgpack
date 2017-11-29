@@ -1634,7 +1634,7 @@ msgpack_ipc_size(PyObject *module, PyObject *args)
             return PyErr_Format(PyExc_TypeError,
                                 "invalid ipc type: '0x%02x'", type);
     }
-    return PyLong_FromSsize_t(_type_size(type));
+    return PyLong_FromSsize_t(_type_size(type) + 1);
 }
 
 
