@@ -832,16 +832,15 @@ PyTuple_FromBufferAndSize(Py_buffer *msg, Py_ssize_t len, Py_ssize_t *off)
     PyObject *result = NULL, *item = NULL;
     Py_ssize_t i;
 
-    if (!(result = PyTuple_New(len))) {
-        return NULL;
-    }
     if (!Py_EnterRecursiveCall(" while unpacking an array")) {
-        for (i = 0; i < len; ++i) {
-            if (!(item = _unpack_msg(msg, off))) {
-                Py_CLEAR(result);
-                break;
+        if ((result = PyTuple_New(len))) {
+            for (i = 0; i < len; ++i) {
+                if (!(item = _unpack_msg(msg, off))) {
+                    Py_CLEAR(result);
+                    break;
+                }
+                PyTuple_SET_ITEM(result, i, item);
             }
-            PyTuple_SET_ITEM(result, i, item);
         }
         Py_LeaveRecursiveCall();
     }
@@ -856,21 +855,20 @@ PyDict_FromBufferAndSize(Py_buffer *msg, Py_ssize_t len, Py_ssize_t *off)
     PyObject *result = NULL, *key = NULL, *val = NULL;
     Py_ssize_t i;
 
-    if (!(result = PyDict_New())) {
-        return NULL;
-    }
     if (!Py_EnterRecursiveCall(" while unpacking a map")) {
-        for (i = 0; i < len; ++i) {
-            if (!(key = _unpack_msg(msg, off)) ||
-                !(val = _unpack_msg(msg, off)) ||
-                PyDict_SetItem(result, key, val)) {
-                Py_XDECREF(key);
-                Py_XDECREF(val);
-                Py_CLEAR(result);
-                break;
+        if ((result = PyDict_New())) {
+            for (i = 0; i < len; ++i) {
+                if (!(key = _unpack_msg(msg, off)) ||
+                    !(val = _unpack_msg(msg, off)) ||
+                    PyDict_SetItem(result, key, val)) {
+                    Py_XDECREF(key);
+                    Py_XDECREF(val);
+                    Py_CLEAR(result);
+                    break;
+                }
+                Py_DECREF(key);
+                Py_DECREF(val);
             }
-            Py_DECREF(key);
-            Py_DECREF(val);
         }
         Py_LeaveRecursiveCall();
     }
@@ -1022,8 +1020,8 @@ _PyObject_SetState(PyObject *self, PyObject *arg)
 
     if ((result = _PyObject_CallMethodIdObjArgs(self, &PyId___setstate__,
                                                 arg, NULL))) {
-        Py_DECREF(result);
         res = 0;
+        Py_DECREF(result);
     }
     else if (PyErr_ExceptionMatches(PyExc_AttributeError) &&
              PyDict_Check(arg)) {
