@@ -473,6 +473,123 @@ __pack_anyset(PyObject *msg, uint8_t type, Py_ssize_t len, PyObject *obj)
 
 /* -------------------------------------------------------------------------- */
 
+#define _Py_RETURN_MSGPACK_INVALID(o) \
+    do { \
+        PyErr_Format(PyExc_OverflowError, \
+                     "%.200s too long to convert", Py_TYPE((o))->tp_name); \
+        return _MSGPACK_INVALID; \
+    } while (0)
+
+
+static inline uint8_t
+__pack_bin_type(PyObject *obj, Py_ssize_t len)
+{
+    if (len < _MSGPACK_UINT8_MAX) {
+        return _MSGPACK_BIN8;
+    }
+    if (len < _MSGPACK_UINT16_MAX) {
+        return _MSGPACK_BIN16;
+    }
+    if (len < _MSGPACK_UINT32_MAX) {
+        return _MSGPACK_BIN32;
+    }
+    _Py_RETURN_MSGPACK_INVALID(obj);
+}
+
+
+static inline uint8_t
+__pack_str_type(PyObject *obj, Py_ssize_t len)
+{
+    if (len < _MSGPACK_FIXSTR_LEN_MAX) { // fixstr
+        return _MSGPACK_FIXSTR | (uint8_t)len;
+    }
+    if (len < _MSGPACK_UINT8_MAX) {
+        return _MSGPACK_STR8;
+    }
+    if (len < _MSGPACK_UINT16_MAX) {
+        return _MSGPACK_STR16;
+    }
+    if (len < _MSGPACK_UINT32_MAX) {
+        return _MSGPACK_STR32;
+    }
+    _Py_RETURN_MSGPACK_INVALID(obj);
+}
+
+
+static inline uint8_t
+__pack_array_type(PyObject *obj, Py_ssize_t len)
+{
+    if (len < _MSGPACK_FIXOBJ_LEN_MAX) { // fixarray
+        return _MSGPACK_FIXARRAY | (uint8_t)len;
+    }
+    if (len < _MSGPACK_UINT16_MAX) {
+        return _MSGPACK_ARRAY16;
+    }
+    if (len < _MSGPACK_UINT32_MAX) {
+        return _MSGPACK_ARRAY32;
+    }
+    _Py_RETURN_MSGPACK_INVALID(obj);
+}
+
+
+static inline uint8_t
+__pack_map_type(PyObject *obj, Py_ssize_t len)
+{
+    if (len < _MSGPACK_FIXOBJ_LEN_MAX) { // fixmap
+        return _MSGPACK_FIXMAP | (uint8_t)len;
+    }
+    if (len < _MSGPACK_UINT16_MAX) {
+        return _MSGPACK_MAP16;
+    }
+    if (len < _MSGPACK_UINT32_MAX) {
+        return _MSGPACK_MAP32;
+    }
+    _Py_RETURN_MSGPACK_INVALID(obj);
+}
+
+
+static inline uint8_t
+__pack_ext_type__(PyObject *obj, Py_ssize_t len)
+{
+    if (len < _MSGPACK_UINT8_MAX) {
+        return _MSGPACK_EXT8;
+    }
+    if (len < _MSGPACK_UINT16_MAX) {
+        return _MSGPACK_EXT16;
+    }
+    if (len < _MSGPACK_UINT32_MAX) {
+        return _MSGPACK_EXT32;
+    }
+    _Py_RETURN_MSGPACK_INVALID(obj);
+}
+
+
+#undef _Py_RETURN_MSGPACK_INVALID
+
+
+static uint8_t
+__pack_ext_type(PyObject *obj, Py_ssize_t len)
+{
+
+    switch (len) {
+        case 1:
+            return _MSGPACK_FIXEXT1;
+        case 2:
+            return _MSGPACK_FIXEXT2;
+        case 4:
+            return _MSGPACK_FIXEXT4;
+        case 8:
+            return _MSGPACK_FIXEXT8;
+        case 16:
+            return _MSGPACK_FIXEXT16;
+        default:
+            return __pack_ext_type__(obj, len);
+    }
+}
+
+
+/* -------------------------------------------------------------------------- */
+
 #define _pack_none(msg) __pack_type((msg), _MSGPACK_NIL)
 #define _pack_false(msg) __pack_type((msg), _MSGPACK_FALSE)
 #define _pack_true(msg) __pack_type((msg), _MSGPACK_TRUE)
@@ -555,30 +672,12 @@ _pack_float(PyObject *msg, PyObject *obj)
 
 
 static int
-_pack_check_len(PyObject *obj, Py_ssize_t len)
-{
-    if (len >= _MSGPACK_UINT32_MAX) {
-        PyErr_Format(PyExc_OverflowError,
-                     "%.200s too long to convert", Py_TYPE(obj)->tp_name);
-        return -1;
-    }
-    return 0;
-}
-
-
-static int
 _pack_bytes(PyObject *msg, PyObject *obj)
 {
-    uint8_t type = _MSGPACK_BIN32;
+    uint8_t type = _MSGPACK_INVALID;
     Py_ssize_t len = Py_SIZE(obj);
 
-    if (len < _MSGPACK_UINT8_MAX) {
-        type = _MSGPACK_BIN8;
-    }
-    else if (len < _MSGPACK_UINT16_MAX) {
-        type = _MSGPACK_BIN16;
-    }
-    else if (_pack_check_len(obj, len)) {
+    if ((type = __pack_bin_type(obj, len)) == _MSGPACK_INVALID) {
         return -1;
     }
     return __pack_bytes(msg, type, len, PyBytes_AS_STRING(obj));
@@ -588,54 +687,25 @@ _pack_bytes(PyObject *msg, PyObject *obj)
 static int
 _pack_unicode(PyObject *msg, PyObject *obj)
 {
-    uint8_t type = _MSGPACK_STR32;
+    uint8_t type = _MSGPACK_INVALID;
     Py_ssize_t len;
     char *buf = NULL;
 
-    if (!(buf = PyUnicode_AsUTF8AndSize(obj, &len))) {
-        return -1;
-    }
-    if (len < _MSGPACK_FIXSTR_LEN_MAX) { // fixstr
-        type = _MSGPACK_FIXSTR | (uint8_t)len;
-    }
-    else if (len < _MSGPACK_UINT8_MAX) {
-        type = _MSGPACK_STR8;
-    }
-    else if (len < _MSGPACK_UINT16_MAX) {
-        type = _MSGPACK_STR16;
-    }
-    else if (_pack_check_len(obj, len)) {
+    if (!(buf = PyUnicode_AsUTF8AndSize(obj, &len)) ||
+        ((type = __pack_str_type(obj, len)) == _MSGPACK_INVALID)) {
         return -1;
     }
     return __pack_bytes(msg, type, len, buf);
 }
 
 
-static uint8_t
-_pack_get_array_type(PyObject *obj, Py_ssize_t len)
-{
-    uint8_t type = _MSGPACK_ARRAY32;
-
-    if (len < _MSGPACK_FIXOBJ_LEN_MAX) { // fixarray
-        type = _MSGPACK_FIXARRAY | (uint8_t)len;
-    }
-    else if (len < _MSGPACK_UINT16_MAX) {
-        type = _MSGPACK_ARRAY16;
-    }
-    else if (_pack_check_len(obj, len)) {
-        type = _MSGPACK_INVALID;
-    }
-    return type;
-}
-
-
 static int
 _pack_sequence(PyObject *msg, PyObject *obj, PyObject **items)
 {
-    Py_ssize_t len = Py_SIZE(obj);
     uint8_t type = _MSGPACK_INVALID;
+    Py_ssize_t len = Py_SIZE(obj);
 
-    if ((type = _pack_get_array_type(obj, len)) == _MSGPACK_INVALID) {
+    if ((type = __pack_array_type(obj, len)) == _MSGPACK_INVALID) {
         return -1;
     }
     return __pack_sequence(msg, type, len, items);
@@ -647,42 +717,26 @@ _pack_sequence(PyObject *msg, PyObject *obj, PyObject **items)
 
 
 static int
-_pack_extension(PyObject *msg, uint8_t _type, PyObject *data)
+_pack_dict(PyObject *msg, PyObject *obj)
 {
-    uint8_t type = _MSGPACK_EXT32;
-    Py_ssize_t len;
+    uint8_t type = _MSGPACK_INVALID;
+    Py_ssize_t len = _PyDict_GET_SIZE(obj);
 
-    if (!PyByteArray_CheckExact(data)) {
-        PyErr_BadInternalCall();
+    if ((type = __pack_map_type(obj, len)) == _MSGPACK_INVALID) {
         return -1;
     }
-    switch ((len = Py_SIZE(data))) {
-        case 1:
-            type = _MSGPACK_FIXEXT1;
-            break;
-        case 2:
-            type = _MSGPACK_FIXEXT2;
-            break;
-        case 4:
-            type = _MSGPACK_FIXEXT4;
-            break;
-        case 8:
-            type = _MSGPACK_FIXEXT8;
-            break;
-        case 16:
-            type = _MSGPACK_FIXEXT16;
-            break;
-        default:
-            if (len < _MSGPACK_UINT8_MAX) {
-                type = _MSGPACK_EXT8;
-            }
-            else if (len < _MSGPACK_UINT16_MAX) {
-                type = _MSGPACK_EXT16;
-            }
-            else if (_pack_check_len(data, len)) {
-                return -1;
-            }
-            break;
+    return __pack_dict(msg, type, len, obj);
+}
+
+
+static int
+_pack_extension(PyObject *msg, uint8_t _type, PyObject *data)
+{
+    uint8_t type = _MSGPACK_INVALID;
+    Py_ssize_t len = Py_SIZE(data);
+
+    if ((type = __pack_ext_type(data, len)) == _MSGPACK_INVALID) {
+        return -1;
     }
     return __pack_extension(msg, type, len, _type, PyByteArray_AS_STRING(data));
 }
@@ -705,33 +759,14 @@ _pack_list(PyObject *msg, PyObject *obj)
 
 
 static int
-_pack_dict(PyObject *msg, PyObject *obj)
-{
-    uint8_t type = _MSGPACK_MAP32;
-    Py_ssize_t len = _PyDict_GET_SIZE(obj);
-
-    if (len < _MSGPACK_FIXOBJ_LEN_MAX) { // fixmap
-        type = _MSGPACK_FIXMAP | (uint8_t)len;
-    }
-    else if (len < _MSGPACK_UINT16_MAX) {
-        type = _MSGPACK_MAP16;
-    }
-    else if (_pack_check_len(obj, len)) {
-        return -1;
-    }
-    return __pack_dict(msg, type, len, obj);
-}
-
-
-static int
 _pack_anyset(PyObject *msg, PyObject *obj, uint8_t _type)
 {
-    Py_ssize_t len = PySet_GET_SIZE(obj);
     uint8_t type = _MSGPACK_INVALID;
+    Py_ssize_t len = PySet_GET_SIZE(obj);
     PyObject *data = NULL;
     int res = -1;
 
-    if (((type = _pack_get_array_type(obj, len)) != _MSGPACK_INVALID) &&
+    if (((type = __pack_array_type(obj, len)) != _MSGPACK_INVALID) &&
         (data = PyByteArray_FromStringAndSize(NULL, 0))) {
         if (!__pack_anyset(data, type, len, obj)) {
             res = _pack_extension(msg, _type, data);
