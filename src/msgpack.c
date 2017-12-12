@@ -303,7 +303,7 @@ _register_obj(PyObject *registry, PyObject *obj)
 
 
 #define __pack(m, s, b) \
-    __pack__((m), (s), ((const char *)(b)))
+    __pack__((m), (s), (const char *)(b))
 
 
 static inline int
@@ -313,12 +313,8 @@ __pack_type(PyObject *msg, uint8_t type)
 }
 
 
-#define __pack_msg(m, t, s, b) \
-    __pack_type((m), (t)) ? -1 : __pack__((m), (s), (b))
-
-
 #define __pack_value(m, t, s, b) \
-    __pack_msg((m), (t), (s), ((const char *)(b)))
+    (__pack_type((m), (t)) ? -1 : __pack((m), (s), (b)))
 
 
 static inline int
@@ -356,7 +352,7 @@ __pack_64(PyObject *msg, uint8_t type, uint64_t value)
 
 
 static inline int
-__pack_signed(PyObject *msg, int64_t value)
+__pack_negative(PyObject *msg, int64_t value)
 {
     if (value < _MSGPACK_INT16_MIN) {
         if (value < _MSGPACK_INT32_MIN) {
@@ -378,7 +374,7 @@ __pack_signed(PyObject *msg, int64_t value)
 
 
 static inline int
-__pack_unsigned(PyObject *msg, int64_t value)
+__pack_positive(PyObject *msg, int64_t value)
 {
     if (value < _MSGPACK_UINT16_MAX) {
         if (value < _MSGPACK_UINT8_MAX) {
@@ -403,13 +399,13 @@ static inline int
 __pack_long(PyObject *msg, int64_t value)
 {
     if (value < _MSGPACK_FIXINT_MIN) {
-        return __pack_signed(msg, value);
+        return __pack_negative(msg, value);
     }
     else if (value < _MSGPACK_FIXINT_MAX) { // fixint
         return __pack_type(msg, (uint8_t)value);
     }
     else {
-        return __pack_unsigned(msg, value);
+        return __pack_positive(msg, value);
     }
 }
 
@@ -530,12 +526,16 @@ __pack_anyset(PyObject *msg, uint8_t type, Py_ssize_t len, PyObject *obj)
 }
 
 
-#define __pack_all(m, t, l, b) \
-    (__pack_len((m), (t), (l)) ? -1 : __pack__((m), (l), (b)))
+#define __pack_data(m, l, b) \
+    ((l) ? __pack__((m), (l), (b)) : 0)
 
 
 #define __pack_bytes(m, t, l, b) \
-    ((l) ? __pack_all((m), (t), (l), (b)) : __pack_len((m), (t), (l)))
+    (__pack_len((m), (t), (l)) ? -1 : __pack_data((m), (l), (b)))
+
+
+#define __pack_msg(m, t, l, b) \
+    (__pack_type((m), (t)) ? -1 : __pack_data((m), (l), (b)))
 
 
 #define __pack_extension(m, t, l, _t, b) \
@@ -790,6 +790,10 @@ _pack_complex(PyObject *msg, PyObject *obj)
 }
 
 
+#define _pack_bytearray(msg, obj) \
+    _pack_extension((msg), _MSGPACK_PYEXT_BYTEARRAY, (obj))
+
+
 static int
 _pack_list(PyObject *msg, PyObject *obj)
 {
@@ -908,6 +912,9 @@ _pack_obj(PyObject *msg, PyObject *obj)
     }
     if (type == &PyBytes_Type) {
         return _pack_bytes(msg, obj);
+    }
+    if (type == &PyByteArray_Type) {
+        return _pack_bytearray(msg, obj);
     }
     if (type == &PyUnicode_Type) {
         return _pack_unicode(msg, obj);
@@ -1290,6 +1297,22 @@ PyComplex_FromBuffer(Py_buffer *msg, Py_ssize_t *off)
 }
 
 
+/* _MSGPACK_PYEXT_BYTEARRAY */
+static PyObject *
+PyByteArray_FromBufferAndSize(Py_buffer *msg, Py_ssize_t size, Py_ssize_t *off)
+{
+    PyObject *result = NULL;
+    Py_ssize_t _off = *off, noff = _off + size;
+    char *buf = ((char *)msg->buf) + _off;
+
+    if (!_unpack_check_off(msg, noff) &&
+        (result = PyByteArray_FromStringAndSize(buf, size))) {
+        *off = noff;
+    }
+    return result;
+}
+
+
 /* _MSGPACK_PYEXT_LIST, _MSGPACK_PYEXT_SET, _MSGPACK_PYEXT_FROZENSET */
 #define __PySequence_FromBuffer(t, m, o) \
     do { \
@@ -1636,6 +1659,8 @@ _PyExtension_FromBufferAndSize(Py_buffer *msg, Py_ssize_t size, Py_ssize_t *off)
     switch (type) {
         case _MSGPACK_PYEXT_COMPLEX:
             return PyComplex_FromBuffer(msg, off);
+        case _MSGPACK_PYEXT_BYTEARRAY:
+            return PyByteArray_FromBufferAndSize(msg, size, off);
         case _MSGPACK_PYEXT_LIST:
             _PyList_FromBuffer(msg, off);
         case _MSGPACK_PYEXT_SET:
