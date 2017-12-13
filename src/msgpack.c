@@ -20,12 +20,6 @@
 */
 
 
-/*
-TODO:
- - bytearrays
-*/
-
-
 #define PY_SSIZE_T_CLEAN
 #include "Python.h"
 #include "structmember.h"
@@ -306,7 +300,7 @@ _register_obj(PyObject *registry, PyObject *obj)
     __pack__((m), (s), (const char *)(b))
 
 
-static inline int
+static int
 __pack_type(PyObject *msg, uint8_t type)
 {
     return __pack(msg, 1, &type);
@@ -317,14 +311,14 @@ __pack_type(PyObject *msg, uint8_t type)
     (__pack_type((m), (t)) ? -1 : __pack((m), (s), (b)))
 
 
-static inline int
+static int
 __pack_8(PyObject *msg, uint8_t type, uint8_t value)
 {
     return __pack_value(msg, type, 1, &value);
 }
 
 
-static inline int
+static int
 __pack_16(PyObject *msg, uint8_t type, uint16_t value)
 {
     uint16_t bevalue = htobe16(value);
@@ -333,7 +327,7 @@ __pack_16(PyObject *msg, uint8_t type, uint16_t value)
 }
 
 
-static inline int
+static int
 __pack_32(PyObject *msg, uint8_t type, uint32_t value)
 {
     uint32_t bevalue = htobe32(value);
@@ -342,7 +336,7 @@ __pack_32(PyObject *msg, uint8_t type, uint32_t value)
 }
 
 
-static inline int
+static int
 __pack_64(PyObject *msg, uint8_t type, uint64_t value)
 {
     uint64_t bevalue = htobe64(value);
@@ -351,7 +345,7 @@ __pack_64(PyObject *msg, uint8_t type, uint64_t value)
 }
 
 
-static inline int
+static int
 __pack_negative(PyObject *msg, int64_t value)
 {
     if (value < _MSGPACK_INT16_MIN) {
@@ -373,7 +367,7 @@ __pack_negative(PyObject *msg, int64_t value)
 }
 
 
-static inline int
+static int
 __pack_positive(PyObject *msg, int64_t value)
 {
     if (value < _MSGPACK_UINT16_MAX) {
@@ -395,7 +389,7 @@ __pack_positive(PyObject *msg, int64_t value)
 }
 
 
-static inline int
+static int
 __pack_long(PyObject *msg, int64_t value)
 {
     if (value < _MSGPACK_FIXINT_MIN) {
@@ -410,7 +404,7 @@ __pack_long(PyObject *msg, int64_t value)
 }
 
 
-static inline int
+static int
 __pack_float(PyObject *msg, float value)
 {
     float_value fval = { .f = value };
@@ -419,7 +413,7 @@ __pack_float(PyObject *msg, float value)
 }
 
 
-static inline int
+static int
 __pack_double(PyObject *msg, double value)
 {
     double_value dval = { .d = value };
@@ -428,7 +422,7 @@ __pack_double(PyObject *msg, double value)
 }
 
 
-static inline int
+static int
 __pack_double__(PyObject *msg, double value)
 {
     // NOTE: this is not the same as FLT_MAX
@@ -462,7 +456,7 @@ __pack_len(PyObject *msg, uint8_t type, Py_ssize_t len)
 }
 
 
-static inline int
+static int
 __pack_sequence(PyObject *msg, uint8_t type, Py_ssize_t len, PyObject **items)
 {
     Py_ssize_t i;
@@ -482,7 +476,7 @@ __pack_sequence(PyObject *msg, uint8_t type, Py_ssize_t len, PyObject **items)
 }
 
 
-static inline int
+static int
 __pack_dict(PyObject *msg, uint8_t type, Py_ssize_t len, PyObject *obj)
 {
     Py_ssize_t pos = 0;
@@ -504,7 +498,7 @@ __pack_dict(PyObject *msg, uint8_t type, Py_ssize_t len, PyObject *obj)
 }
 
 
-static inline int
+static int
 __pack_anyset(PyObject *msg, uint8_t type, Py_ssize_t len, PyObject *obj)
 {
     Py_ssize_t pos = 0;
@@ -552,7 +546,7 @@ __pack_anyset(PyObject *msg, uint8_t type, Py_ssize_t len, PyObject *obj)
     } while (0)
 
 
-static inline uint8_t
+static uint8_t
 __pack_bin_type(PyObject *obj, Py_ssize_t len)
 {
     if (len < _MSGPACK_UINT8_MAX) {
@@ -568,7 +562,7 @@ __pack_bin_type(PyObject *obj, Py_ssize_t len)
 }
 
 
-static inline uint8_t
+static uint8_t
 __pack_str_type(PyObject *obj, Py_ssize_t len)
 {
     if (len < _MSGPACK_FIXSTR_LEN_MAX) { // fixstr
@@ -587,7 +581,7 @@ __pack_str_type(PyObject *obj, Py_ssize_t len)
 }
 
 
-static inline uint8_t
+static uint8_t
 __pack_array_type(PyObject *obj, Py_ssize_t len)
 {
     if (len < _MSGPACK_FIXOBJ_LEN_MAX) { // fixarray
@@ -603,7 +597,7 @@ __pack_array_type(PyObject *obj, Py_ssize_t len)
 }
 
 
-static inline uint8_t
+static uint8_t
 __pack_map_type(PyObject *obj, Py_ssize_t len)
 {
     if (len < _MSGPACK_FIXOBJ_LEN_MAX) { // fixmap
@@ -619,7 +613,7 @@ __pack_map_type(PyObject *obj, Py_ssize_t len)
 }
 
 
-static inline uint8_t
+static uint8_t
 __pack_ext_type__(PyObject *obj, Py_ssize_t len)
 {
     if (len < _MSGPACK_UINT8_MAX) {
@@ -633,9 +627,6 @@ __pack_ext_type__(PyObject *obj, Py_ssize_t len)
     }
     _Py_RETURN_MSGPACK_INVALID(obj);
 }
-
-
-#undef _Py_RETURN_MSGPACK_INVALID
 
 
 static uint8_t
@@ -956,7 +947,7 @@ _pack_obj(PyObject *msg, PyObject *obj)
 #define __unpack_64(b) __unpack_value__(64, (b))
 
 
-static inline double
+static double
 __unpack_float(const char *buf)
 {
     float_value fval = { .u32 = __unpack_32(buf) };
@@ -965,165 +956,13 @@ __unpack_float(const char *buf)
 }
 
 
-static inline double
+static double
 __unpack_double(const char *buf)
 {
     double_value dval = { .u64 = __unpack_64(buf) };
 
     return dval.d;
 }
-
-
-/* -------------------------------------------------------------------------- */
-
-/* PyLong */
-static PyObject *
-_PyLong_FromSigned(const char *buf, Py_ssize_t size)
-{
-    switch (size) {
-        case 1:
-            return PyLong_FromLong((int8_t)__unpack_8(buf));
-        case 2:
-            return PyLong_FromLong((int16_t)__unpack_16(buf));
-        case 4:
-            return PyLong_FromLong((int32_t)__unpack_32(buf));
-        case 8:
-            return PyLong_FromLongLong((int64_t)__unpack_64(buf));
-        default:
-            PyErr_BadInternalCall();
-            return NULL;
-    }
-}
-
-static PyObject *
-_PyLong_FromUnsigned(const char *buf, Py_ssize_t size)
-{
-    switch (size) {
-        case 1:
-            return PyLong_FromUnsignedLong(__unpack_8(buf));
-        case 2:
-            return PyLong_FromUnsignedLong(__unpack_16(buf));
-        case 4:
-            return PyLong_FromUnsignedLong(__unpack_32(buf));
-        case 8:
-            return PyLong_FromUnsignedLongLong(__unpack_64(buf));
-        default:
-            PyErr_BadInternalCall();
-            return NULL;
-    }
-}
-
-#define PyLong_FromStringAndSize(b, s, is) \
-    ((is) ? _PyLong_FromSigned((b), (s)) : _PyLong_FromUnsigned((b), (s)))
-
-
-/* PyFloat */
-static PyObject *
-PyFloat_FromStringAndSize(const char *buf, Py_ssize_t size)
-{
-    switch (size) {
-        case 4:
-            return PyFloat_FromDouble(__unpack_float(buf));
-        case 8:
-            return PyFloat_FromDouble(__unpack_double(buf));
-        default:
-            PyErr_BadInternalCall();
-            return NULL;
-    }
-}
-
-
-/* PySequence */
-static PyObject *
-_PySequence_FromBufferAndSize(Py_buffer *msg, Py_ssize_t len, Py_ssize_t *off, int list)
-{
-    PyObject *result = NULL, *item = NULL;
-    Py_ssize_t i;
-
-    if (!Py_EnterRecursiveCall(" while unpacking a sequence")) {
-        if ((result = (list) ? PyList_New(len) : PyTuple_New(len))) {
-            for (i = 0; i < len; ++i) {
-                if (!(item = _unpack_msg(msg, off))) {
-                    Py_CLEAR(result);
-                    break;
-                }
-                if (list) {
-                    PyList_SET_ITEM(result, i, item);
-                }
-                else  {
-                    PyTuple_SET_ITEM(result, i, item);
-                }
-            }
-        }
-        Py_LeaveRecursiveCall();
-    }
-    return result;
-}
-
-#define PyTuple_FromBufferAndSize(m, s, o) \
-    _PySequence_FromBufferAndSize((m), (s), (o), 0)
-
-#define PyList_FromBufferAndSize(m, s, o) \
-    _PySequence_FromBufferAndSize((m), (s), (o), 1)
-
-
-/* PyDict */
-static PyObject *
-PyDict_FromBufferAndSize(Py_buffer *msg, Py_ssize_t len, Py_ssize_t *off)
-{
-    PyObject *result = NULL, *key = NULL, *val = NULL;
-    Py_ssize_t i;
-
-    if (!Py_EnterRecursiveCall(" while unpacking a dict")) {
-        if ((result = PyDict_New())) {
-            for (i = 0; i < len; ++i) {
-                if (!(key = _unpack_msg(msg, off)) ||
-                    !(val = _unpack_msg(msg, off)) ||
-                    PyDict_SetItem(result, key, val)) {
-                    Py_XDECREF(key);
-                    Py_XDECREF(val);
-                    Py_CLEAR(result);
-                    break;
-                }
-                Py_DECREF(key);
-                Py_DECREF(val);
-            }
-        }
-        Py_LeaveRecursiveCall();
-    }
-    return result;
-}
-
-
-/* PySet */
-static PyObject *
-_PyAnySet_FromBufferAndSize(Py_buffer *msg, Py_ssize_t len, Py_ssize_t *off, int frozen)
-{
-    PyObject *result = NULL, *item = NULL;
-    Py_ssize_t i;
-
-    if (!Py_EnterRecursiveCall(" while unpacking a set")) {
-        if ((result = (frozen) ? PyFrozenSet_New(NULL) : PySet_New(NULL))) {
-            for (i = 0; i < len; ++i) {
-                if (!(item = _unpack_msg(msg, off)) ||
-                    PySet_Add(result, item)) {
-                    Py_XDECREF(item);
-                    Py_CLEAR(result);
-                    break;
-                }
-                Py_DECREF(item);
-            }
-        }
-        Py_LeaveRecursiveCall();
-    }
-    return result;
-}
-
-#define PySet_FromBufferAndSize(m, s, o) \
-    _PyAnySet_FromBufferAndSize((m), (s), (o), 0)
-
-#define PyFrozenSet_FromBufferAndSize(m, s, o) \
-    _PyAnySet_FromBufferAndSize((m), (s), (o), 1)
 
 
 /* -------------------------------------------------------------------------- */
@@ -1139,7 +978,7 @@ _unpack_check_off(Py_buffer *msg, Py_ssize_t off)
 }
 
 
-static inline uint8_t
+static uint8_t
 __unpack_type(Py_buffer *msg, Py_ssize_t *off)
 {
     Py_ssize_t _off = *off, noff = _off + 1;
@@ -1234,6 +1073,213 @@ __unpack_registered(Py_buffer *msg, Py_ssize_t size, Py_ssize_t *off)
 }
 
 
+/* -------------------------------------------------------------------------- */
+
+/* PyLong */
+static PyObject *
+_PyLong_FromSigned(const char *buf, Py_ssize_t size)
+{
+    switch (size) {
+        case 1:
+            return PyLong_FromLong((int8_t)__unpack_8(buf));
+        case 2:
+            return PyLong_FromLong((int16_t)__unpack_16(buf));
+        case 4:
+            return PyLong_FromLong((int32_t)__unpack_32(buf));
+        case 8:
+            return PyLong_FromLongLong((int64_t)__unpack_64(buf));
+        default:
+            PyErr_BadInternalCall();
+            return NULL;
+    }
+}
+
+static PyObject *
+_PyLong_FromUnsigned(const char *buf, Py_ssize_t size)
+{
+    switch (size) {
+        case 1:
+            return PyLong_FromUnsignedLong(__unpack_8(buf));
+        case 2:
+            return PyLong_FromUnsignedLong(__unpack_16(buf));
+        case 4:
+            return PyLong_FromUnsignedLong(__unpack_32(buf));
+        case 8:
+            return PyLong_FromUnsignedLongLong(__unpack_64(buf));
+        default:
+            PyErr_BadInternalCall();
+            return NULL;
+    }
+}
+
+
+/* PyFloat */
+static PyObject *
+PyFloat_FromStringAndSize(const char *buf, Py_ssize_t size)
+{
+    switch (size) {
+        case 4:
+            return PyFloat_FromDouble(__unpack_float(buf));
+        case 8:
+            return PyFloat_FromDouble(__unpack_double(buf));
+        default:
+            PyErr_BadInternalCall();
+            return NULL;
+    }
+}
+
+
+/* PySequence */
+static PyObject *
+PySequence_FromBufferAndSize(Py_buffer *msg, Py_ssize_t len, Py_ssize_t *off, int list)
+{
+    PyObject *result = NULL, *item = NULL;
+    Py_ssize_t i;
+
+    if (!Py_EnterRecursiveCall(" while unpacking a sequence")) {
+        if ((result = (list) ? PyList_New(len) : PyTuple_New(len))) {
+            for (i = 0; i < len; ++i) {
+                if (!(item = _unpack_msg(msg, off))) {
+                    Py_CLEAR(result);
+                    break;
+                }
+                if (list) {
+                    PyList_SET_ITEM(result, i, item);
+                }
+                else  {
+                    PyTuple_SET_ITEM(result, i, item);
+                }
+            }
+        }
+        Py_LeaveRecursiveCall();
+    }
+    return result;
+}
+
+
+/* PyDict */
+static PyObject *
+PyDict_FromBufferAndSize(Py_buffer *msg, Py_ssize_t len, Py_ssize_t *off)
+{
+    PyObject *result = NULL, *key = NULL, *val = NULL;
+    Py_ssize_t i;
+
+    if (!Py_EnterRecursiveCall(" while unpacking a dict")) {
+        if ((result = PyDict_New())) {
+            for (i = 0; i < len; ++i) {
+                if (!(key = _unpack_msg(msg, off)) ||
+                    !(val = _unpack_msg(msg, off)) ||
+                    PyDict_SetItem(result, key, val)) {
+                    Py_XDECREF(key);
+                    Py_XDECREF(val);
+                    Py_CLEAR(result);
+                    break;
+                }
+                Py_DECREF(key);
+                Py_DECREF(val);
+            }
+        }
+        Py_LeaveRecursiveCall();
+    }
+    return result;
+}
+
+
+/* PySet */
+static PyObject *
+PyAnySet_FromBufferAndSize(Py_buffer *msg, Py_ssize_t len, Py_ssize_t *off, int frozen)
+{
+    PyObject *result = NULL, *item = NULL;
+    Py_ssize_t i;
+
+    if (!Py_EnterRecursiveCall(" while unpacking a set")) {
+        if ((result = (frozen) ? PyFrozenSet_New(NULL) : PySet_New(NULL))) {
+            for (i = 0; i < len; ++i) {
+                if (!(item = _unpack_msg(msg, off)) ||
+                    PySet_Add(result, item)) {
+                    Py_XDECREF(item);
+                    Py_CLEAR(result);
+                    break;
+                }
+                Py_DECREF(item);
+            }
+        }
+        Py_LeaveRecursiveCall();
+    }
+    return result;
+}
+
+
+/* -------------------------------------------------------------------------- */
+
+#define PyLong_FromStringAndSize(b, s, is) \
+    ((is) ? _PyLong_FromSigned((b), (s)) : _PyLong_FromUnsigned((b), (s)))
+
+#define __PyObject_FromBufferAndSize(t, m, s, o, ...) \
+    do { \
+        PyObject *r = NULL; \
+        Py_ssize_t _o = *(o), no = _o + (s); \
+        char *b = ((char *)(m)->buf) + _o; \
+        if (!_unpack_check_off((m), no) && \
+            (r = t##_FromStringAndSize(b, (s), ##__VA_ARGS__))) { \
+            *(o) = no; \
+        } \
+        return r; \
+    } while (0)
+
+#define _PyLong_FromBufferAndSize(m, s, o, is) \
+    __PyObject_FromBufferAndSize(PyLong, (m), (s), (o), (is))
+
+#define _PyFloat_FromBufferAndSize(m, s, o) \
+    __PyObject_FromBufferAndSize(PyFloat, (m), (s), (o))
+
+#define _PyBytes_FromBufferAndSize(m, s, o) \
+    __PyObject_FromBufferAndSize(PyBytes, (m), (s), (o))
+
+#define _PyByteArray_FromBufferAndSize(m, s, o) \
+    __PyObject_FromBufferAndSize(PyByteArray, (m), (s), (o))
+
+#define _PyUnicode_FromBufferAndSize(m, s, o) \
+    __PyObject_FromBufferAndSize(PyUnicode, (m), (s), (o))
+
+#define _PyTuple_FromBufferAndSize(m, s, o) \
+    return PySequence_FromBufferAndSize((m), (s), (o), 0)
+
+#define _PyDict_FromBufferAndSize(m, s, o) \
+    return PyDict_FromBufferAndSize((m), (s), (o))
+
+#define _PyList_FromBufferAndSize(m, s, o) \
+    PySequence_FromBufferAndSize((m), (s), (o), 1)
+
+#define _PySet_FromBufferAndSize(m, s, o) \
+    PyAnySet_FromBufferAndSize((m), (s), (o), 0)
+
+#define _PyFrozenSet_FromBufferAndSize(m, s, o) \
+    PyAnySet_FromBufferAndSize((m), (s), (o), 1)
+
+
+#define __PyObject_FromBuffer(t, m, s, o) \
+    do { \
+        Py_ssize_t l = -1; \
+        if ((l = _unpack_len((m), (s), (o))) < 0) { \
+            return NULL; \
+        } \
+        _##t##_FromBufferAndSize((m), l, (o)); \
+    } while (0)
+
+#define _PyBytes_FromBuffer(m, s, o) \
+    __PyObject_FromBuffer(PyBytes, (m), (s), (o))
+
+#define _PyUnicode_FromBuffer(m, s, o) \
+    __PyObject_FromBuffer(PyUnicode, (m), (s), (o))
+
+#define _PyTuple_FromBuffer(m, s, o) \
+    __PyObject_FromBuffer(PyTuple, (m), (s), (o))
+
+#define _PyDict_FromBuffer(m, s, o) \
+    __PyObject_FromBuffer(PyDict, (m), (s), (o))
+
+
 /* extension ---------------------------------------------------------------- */
 
 /* _MSGPACK_PYEXT_COMPLEX */
@@ -1297,29 +1343,13 @@ PyComplex_FromBuffer(Py_buffer *msg, Py_ssize_t *off)
 }
 
 
-/* _MSGPACK_PYEXT_BYTEARRAY */
-static PyObject *
-PyByteArray_FromBufferAndSize(Py_buffer *msg, Py_ssize_t size, Py_ssize_t *off)
-{
-    PyObject *result = NULL;
-    Py_ssize_t _off = *off, noff = _off + size;
-    char *buf = ((char *)msg->buf) + _off;
-
-    if (!_unpack_check_off(msg, noff) &&
-        (result = PyByteArray_FromStringAndSize(buf, size))) {
-        *off = noff;
-    }
-    return result;
-}
-
-
 /* _MSGPACK_PYEXT_LIST, _MSGPACK_PYEXT_SET, _MSGPACK_PYEXT_FROZENSET */
 #define __PySequence_FromBuffer(t, m, o) \
     do { \
         PyObject *r = NULL; \
         Py_ssize_t l = -1; \
         if ((l = _unpack_array_len((m), (o))) >= 0) { \
-            r = t##_FromBufferAndSize((m), l, (o)); \
+            r = _##t##_FromBufferAndSize((m), l, (o)); \
         } \
         return r; \
     } while (0)
@@ -1335,7 +1365,7 @@ PyByteArray_FromBufferAndSize(Py_buffer *msg, Py_ssize_t size, Py_ssize_t *off)
 
 
 /* _MSGPACK_PYEXT_CLASS */
-static inline void
+static void
 __PyClass_ErrFromBuffer(Py_buffer *msg, Py_ssize_t *off)
 {
     _Py_IDENTIFIER(builtins);
@@ -1371,7 +1401,7 @@ PyClass_FromBufferAndSize(Py_buffer *msg, Py_ssize_t size, Py_ssize_t *off)
 
 
 /* _MSGPACK_PYEXT_SINGLETON */
-static inline void
+static void
 __PySingleton_ErrFromBuffer(Py_buffer *msg, Py_ssize_t *off)
 {
     PyObject *name = NULL;
@@ -1660,7 +1690,7 @@ _PyExtension_FromBufferAndSize(Py_buffer *msg, Py_ssize_t size, Py_ssize_t *off)
         case _MSGPACK_PYEXT_COMPLEX:
             return PyComplex_FromBuffer(msg, off);
         case _MSGPACK_PYEXT_BYTEARRAY:
-            return PyByteArray_FromBufferAndSize(msg, size, off);
+            _PyByteArray_FromBufferAndSize(msg, size, off);
         case _MSGPACK_PYEXT_LIST:
             _PyList_FromBuffer(msg, off);
         case _MSGPACK_PYEXT_SET:
@@ -1713,59 +1743,6 @@ _PyExtension_FromBuffer(Py_buffer *msg, uint8_t type, Py_ssize_t *off)
 
 
 /* -------------------------------------------------------------------------- */
-
-#define __PyObject_FromBufferAndSize(t, m, s, o, ...) \
-    do { \
-        PyObject *r = NULL; \
-        Py_ssize_t _o = *(o), no = _o + (s); \
-        char *b = ((char *)(m)->buf) + _o; \
-        if (!_unpack_check_off((m), no) && \
-            (r = t##_FromStringAndSize(b, (s), ##__VA_ARGS__))) { \
-            *(o) = no; \
-        } \
-        return r; \
-    } while (0)
-
-#define _PyLong_FromBufferAndSize(m, s, o, is) \
-    __PyObject_FromBufferAndSize(PyLong, (m), (s), (o), (is))
-
-#define _PyFloat_FromBufferAndSize(m, s, o) \
-    __PyObject_FromBufferAndSize(PyFloat, (m), (s), (o))
-
-#define _PyBytes_FromBufferAndSize(m, s, o) \
-    __PyObject_FromBufferAndSize(PyBytes, (m), (s), (o))
-
-#define _PyUnicode_FromBufferAndSize(m, s, o) \
-    __PyObject_FromBufferAndSize(PyUnicode, (m), (s), (o))
-
-#define _PyTuple_FromBufferAndSize(m, s, o) \
-    return PyTuple_FromBufferAndSize((m), (s), (o))
-
-#define _PyDict_FromBufferAndSize(m, s, o) \
-    return PyDict_FromBufferAndSize((m), (s), (o))
-
-
-#define __PyObject_FromBuffer(t, m, s, o) \
-    do { \
-        Py_ssize_t l = -1; \
-        if ((l = _unpack_len((m), (s), (o))) < 0) { \
-            return NULL; \
-        } \
-        _##t##_FromBufferAndSize((m), l, (o)); \
-    } while (0)
-
-#define _PyBytes_FromBuffer(m, s, o) \
-    __PyObject_FromBuffer(PyBytes, (m), (s), (o))
-
-#define _PyUnicode_FromBuffer(m, s, o) \
-    __PyObject_FromBuffer(PyUnicode, (m), (s), (o))
-
-#define _PyTuple_FromBuffer(m, s, o) \
-    __PyObject_FromBuffer(PyTuple, (m), (s), (o))
-
-#define _PyDict_FromBuffer(m, s, o) \
-    __PyObject_FromBuffer(PyDict, (m), (s), (o))
-
 
 static PyObject *
 _unpack_msg(Py_buffer *msg, Py_ssize_t *off)
@@ -1840,7 +1817,7 @@ _unpack_msg(Py_buffer *msg, Py_ssize_t *off)
  ipc packing helpers
  ---------------------------------------------------------------------------- */
 
-static inline PyObject *
+static PyObject *
 __ipc_pack_obj(PyObject *obj)
 {
     PyObject *result = NULL;
