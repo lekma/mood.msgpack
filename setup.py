@@ -54,7 +54,7 @@ setup(
 
       ext_package="mood",
       ext_modules=[
-                   Extension("msgpack", ["src/helpers/helpers.c", "src/msgpack.c"],
+                   Extension("msgpack", ["src/msgpack.c"],
                              define_macros=[PKG_VERSION])
       ],
 
