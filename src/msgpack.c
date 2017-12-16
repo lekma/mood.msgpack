@@ -971,6 +971,21 @@ __unpack_double(const char *buf)
 }
 
 
+/*static double
+__unpack_double__(const char *buf, Py_ssize_t size)
+{
+    switch (size) {
+        case 4:
+            return __unpack_float(buf);
+        case 8:
+            return __unpack_double(buf);
+        default:
+            PyErr_BadInternalCall();
+            return -1.0;
+    }
+}*/
+
+
 static Py_ssize_t
 __unpack_len(const char *buf, Py_ssize_t size)
 {
@@ -1278,7 +1293,7 @@ PySet_FromBufferAndSize(Py_buffer *msg, Py_ssize_t len, Py_ssize_t *off, int fro
 
 /* _MSGPACK_PYEXT_COMPLEX */
 static double
-__unpack_double__(Py_buffer *msg, Py_ssize_t size, Py_ssize_t *off)
+__double_from_buffer(Py_buffer *msg, Py_ssize_t size, Py_ssize_t *off)
 {
     Py_ssize_t _off = *off, noff = _off + size;
     char *buf = ((char *)msg->buf) + _off;
@@ -1311,7 +1326,7 @@ _unpack_complex_member(Py_buffer *msg, Py_ssize_t *off)
         switch (type) {
             case _MSGPACK_FLOAT32:
             case _MSGPACK_FLOAT64:
-                result = __unpack_double__(msg, _type_size(type), off);
+                result = __double_from_buffer(msg, _type_size(type), off);
                 break;
             default:
                 PyErr_Format(PyExc_TypeError,
@@ -1687,7 +1702,7 @@ Timestamp_FromBufferAndSize(Py_buffer *msg, Py_ssize_t size, Py_ssize_t *off)
 
 
 static PyObject *
-_PyExtension_FromBufferAndSize(Py_buffer *msg, Py_ssize_t size, Py_ssize_t *off)
+PyExtension_FromBufferAndSize(Py_buffer *msg, Py_ssize_t size, Py_ssize_t *off)
 {
     uint8_t type = _MSGPACK_INVALID;
 
@@ -1720,34 +1735,11 @@ _PyExtension_FromBufferAndSize(Py_buffer *msg, Py_ssize_t size, Py_ssize_t *off)
     }
 }
 
+#define _PyExtension_FromBufferAndSize(m, s, o) \
+    return PyExtension_FromBufferAndSize((m), (s), (o))
 
-static PyObject *
-_PyExtension_FromBuffer(Py_buffer *msg, uint8_t type, Py_ssize_t *off)
-{
-    Py_ssize_t len = -1;
-
-    switch (type) {
-        case _MSGPACK_FIXEXT1:
-            len = 1;
-            break;
-        case _MSGPACK_FIXEXT2:
-            len = 2;
-            break;
-        case _MSGPACK_FIXEXT4:
-            len = 4;
-            break;
-        case _MSGPACK_FIXEXT8:
-            len = 8;
-            break;
-        case _MSGPACK_FIXEXT16:
-            len = 16;
-            break;
-        default:
-            len = _unpack_len(msg, _type_size(type), off);
-            break;
-    }
-    return (len < 0) ? NULL : _PyExtension_FromBufferAndSize(msg, len, off);
-}
+#define _PyExtension_FromBuffer(m, s, o) \
+    __PyObject_FromBuffer(PyExtension, (m), (s), (o))
 
 
 /* unpack ------------------------------------------------------------------- */
@@ -1782,7 +1774,7 @@ _unpack_msg(Py_buffer *msg, Py_ssize_t *off)
         case _MSGPACK_EXT8:
         case _MSGPACK_EXT16:
         case _MSGPACK_EXT32:
-            return _PyExtension_FromBuffer(msg, type, off);
+            _PyExtension_FromBuffer(msg, _type_size(type), off);
         case _MSGPACK_FLOAT32:
         case _MSGPACK_FLOAT64:
             _PyFloat_FromBufferAndSize(msg, _type_size(type), off);
@@ -1797,11 +1789,15 @@ _unpack_msg(Py_buffer *msg, Py_ssize_t *off)
         case _MSGPACK_INT64:
             _PyLong_FromBufferAndSize(msg, _type_size(type), off, 1);
         case _MSGPACK_FIXEXT1:
+            _PyExtension_FromBufferAndSize(msg, 1, off);
         case _MSGPACK_FIXEXT2:
+            _PyExtension_FromBufferAndSize(msg, 2, off);
         case _MSGPACK_FIXEXT4:
+            _PyExtension_FromBufferAndSize(msg, 4, off);
         case _MSGPACK_FIXEXT8:
+            _PyExtension_FromBufferAndSize(msg, 8, off);
         case _MSGPACK_FIXEXT16:
-            return _PyExtension_FromBuffer(msg, type, off);
+            _PyExtension_FromBufferAndSize(msg, 16, off);
         case _MSGPACK_STR8:
         case _MSGPACK_STR16:
         case _MSGPACK_STR32:
