@@ -103,7 +103,10 @@ _init_state(PyObject *module)
 #define _MSGPACK_FIXINT_MIN -(1LL << 5)
 
 #define _MSGPACK_FIXSTR_LEN_MAX (1LL << 5)
+#define _MSGPACK_FIXSTR_BIT 0x1f
+
 #define _MSGPACK_FIXOBJ_LEN_MAX (1LL << 4)
+#define _MSGPACK_FIXOBJ_BIT 0x0f
 
 
 /* MessagePack types */
@@ -1057,7 +1060,7 @@ _unpack_array_len(Py_buffer *msg, Py_ssize_t *off)
     if ((type = _unpack_type(msg, off)) != _MSGPACK_INVALID) {
         switch (type) {
             case _MSGPACK_FIXARRAY ... _MSGPACK_FIXARRAYEND:
-                len = (type & 0x0f);
+                len = (type & _MSGPACK_FIXOBJ_BIT);
                 break;
             case _MSGPACK_ARRAY16:
             case _MSGPACK_ARRAY32:
@@ -1756,11 +1759,11 @@ _unpack_msg(Py_buffer *msg, Py_ssize_t *off)
         case _MSGPACK_FIXPINT ... _MSGPACK_FIXPINTEND:
             return PyLong_FromLong(type);
         case _MSGPACK_FIXMAP ... _MSGPACK_FIXMAPEND:
-            _PyDict_FromBufferAndSize(msg, (type & 0x0f), off);
+            _PyDict_FromBufferAndSize(msg, (type & _MSGPACK_FIXOBJ_BIT), off);
         case _MSGPACK_FIXARRAY ... _MSGPACK_FIXARRAYEND:
-            _PyTuple_FromBufferAndSize(msg, (type & 0x0f), off);
+            _PyTuple_FromBufferAndSize(msg, (type & _MSGPACK_FIXOBJ_BIT), off);
         case _MSGPACK_FIXSTR ... _MSGPACK_FIXSTREND:
-            _PyUnicode_FromBufferAndSize(msg, (type & 0x1f), off);
+            _PyUnicode_FromBufferAndSize(msg, (type & _MSGPACK_FIXSTR_BIT), off);
         case _MSGPACK_NIL:
             Py_RETURN_NONE;
         case _MSGPACK_FALSE:
