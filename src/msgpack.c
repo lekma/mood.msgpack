@@ -24,7 +24,6 @@
 #include "Python.h"
 
 #define _PY_INLINE_HELPERS
-#define _Py_MIN_ALLOC 32
 #include "helpers/helpers.c"
 
 
@@ -370,36 +369,38 @@ static uint8_t
 __pack_ext_type(PyObject *obj, Py_ssize_t len)
 {
 
-    switch (len) {
-        case 1:
+    if (len < _MSGPACK_UINT8_MAX) {
+        if (len == 1) {
             return _MSGPACK_FIXEXT1;
-        case 2:
+        }
+        if (len == 2) {
             return _MSGPACK_FIXEXT2;
-        case 4:
+        }
+        if (len == 4) {
             return _MSGPACK_FIXEXT4;
-        case 8:
+        }
+        if (len == 8) {
             return _MSGPACK_FIXEXT8;
-        case 16:
+        }
+        if (len == 16) {
             return _MSGPACK_FIXEXT16;
-        default:
-            if (len < _MSGPACK_UINT8_MAX) {
-                return _MSGPACK_EXT8;
-            }
-            if (len < _MSGPACK_UINT16_MAX) {
-                return _MSGPACK_EXT16;
-            }
-            if (len < _MSGPACK_UINT32_MAX) {
-                return _MSGPACK_EXT32;
-            }
-            return _PyErr_TooLong(obj), _MSGPACK_INVALID;
+        }
+        return _MSGPACK_EXT8;
     }
+    if (len < _MSGPACK_UINT16_MAX) {
+        return _MSGPACK_EXT16;
+    }
+    if (len < _MSGPACK_UINT32_MAX) {
+        return _MSGPACK_EXT32;
+    }
+    return _PyErr_TooLong(obj), _MSGPACK_INVALID;
 }
 
 
 /* -------------------------------------------------------------------------- */
 
 #define __pack__(m, s, b) \
-    __PyByteArray_Grow(((PyByteArrayObject *)(m)), (s), (b), _Py_MIN_ALLOC)
+    __PyByteArray_Grow(((PyByteArrayObject *)(m)), (s), (b), 32)
 
 
 #define __pack(m, s, b) \
@@ -556,19 +557,20 @@ __pack_len__(PyObject *msg, uint8_t type, Py_ssize_t len)
 {
     Py_ssize_t size;
 
-    switch ((size = _type_size(type))) {
-        case 0:
-            return __pack_type(msg, type);
-        case 1:
-            return __pack_8(msg, type, (uint8_t)len);
-        case 2:
-            return __pack_16(msg, type, (uint16_t)len);
-        case 4:
-            return __pack_32(msg, type, (uint32_t)len);
-        default:
-            PyErr_BadInternalCall();
-            return -1;
+    if (!(size = _type_size(type))) {
+        return __pack_type(msg, type);
     }
+    if (size == 1) {
+        return __pack_8(msg, type, (uint8_t)len);
+    }
+    if (size == 2) {
+        return __pack_16(msg, type, (uint16_t)len);
+    }
+    if (size == 4) {
+        return __pack_32(msg, type, (uint32_t)len);
+    }
+    PyErr_BadInternalCall();
+    return -1;
 }
 
 
@@ -977,32 +979,31 @@ __unpack_double(const char *buf)
 /*static double
 __unpack_double__(const char *buf, Py_ssize_t size)
 {
-    switch (size) {
-        case 4:
-            return __unpack_float(buf);
-        case 8:
-            return __unpack_double(buf);
-        default:
-            PyErr_BadInternalCall();
-            return -1.0;
+    if (size == 4) {
+        return __unpack_float(buf);
     }
+    if (size == 8) {
+        return __unpack_double(buf);
+    }
+    PyErr_BadInternalCall();
+    return -1.0;
 }*/
 
 
 static Py_ssize_t
 __unpack_len(const char *buf, Py_ssize_t size)
 {
-    switch (size) {
-        case 1:
-            return __unpack_8(buf);
-        case 2:
-            return __unpack_16(buf);
-        case 4:
-            return __unpack_32(buf);
-        default:
-            PyErr_BadInternalCall();
-            return -1;
+    if (size == 1) {
+        return __unpack_8(buf);
     }
+    if (size == 2) {
+        return __unpack_16(buf);
+    }
+    if (size == 4) {
+        return __unpack_32(buf);
+    }
+    PyErr_BadInternalCall();
+    return -1;
 }
 
 
@@ -1058,18 +1059,18 @@ _unpack_array_len(Py_buffer *msg, Py_ssize_t *off)
     Py_ssize_t len = -1;
 
     if ((type = _unpack_type(msg, off)) != _MSGPACK_INVALID) {
-        switch (type) {
-            case _MSGPACK_FIXARRAY ... _MSGPACK_FIXARRAYEND:
-                len = (type & _MSGPACK_FIXOBJ_BIT);
-                break;
-            case _MSGPACK_ARRAY16:
-            case _MSGPACK_ARRAY32:
-                len = _unpack_len(msg, _type_size(type), off);
-                break;
-            default:
-                PyErr_Format(PyExc_TypeError,
-                             "cannot unpack, invalid array type: '0x%02x'", type);
-                break;
+        if ((type >= _MSGPACK_FIXARRAY) && (type <= _MSGPACK_FIXARRAYEND)) {
+            len = (type & _MSGPACK_FIXOBJ_BIT);
+        }
+        else if (type == _MSGPACK_ARRAY16) {
+            len = _unpack_len(msg, 2, off);
+        }
+        else if (type == _MSGPACK_ARRAY32) {
+            len = _unpack_len(msg, 4, off);
+        }
+        else {
+            PyErr_Format(PyExc_TypeError,
+                         "cannot unpack, invalid array type: '0x%02x'", type);
         }
     }
     return len;
@@ -1103,37 +1104,39 @@ _unpack_registered(Py_buffer *msg, Py_ssize_t size, Py_ssize_t *off)
 static PyObject *
 _PyLong_FromSigned(const char *buf, Py_ssize_t size)
 {
-    switch (size) {
-        case 1:
-            return PyLong_FromLong((int8_t)__unpack_8(buf));
-        case 2:
-            return PyLong_FromLong((int16_t)__unpack_16(buf));
-        case 4:
-            return PyLong_FromLong((int32_t)__unpack_32(buf));
-        case 8:
-            return PyLong_FromLongLong((int64_t)__unpack_64(buf));
-        default:
-            PyErr_BadInternalCall();
-            return NULL;
+    if (size == 1) {
+        return PyLong_FromLong((int8_t)__unpack_8(buf));
     }
+    if (size == 2) {
+        return PyLong_FromLong((int16_t)__unpack_16(buf));
+    }
+    if (size == 4) {
+        return PyLong_FromLong((int32_t)__unpack_32(buf));
+    }
+    if (size == 8) {
+        return PyLong_FromLongLong((int64_t)__unpack_64(buf));
+    }
+    PyErr_BadInternalCall();
+    return NULL;
 }
 
 static PyObject *
 _PyLong_FromUnsigned(const char *buf, Py_ssize_t size)
 {
-    switch (size) {
-        case 1:
-            return PyLong_FromUnsignedLong(__unpack_8(buf));
-        case 2:
-            return PyLong_FromUnsignedLong(__unpack_16(buf));
-        case 4:
-            return PyLong_FromUnsignedLong(__unpack_32(buf));
-        case 8:
-            return PyLong_FromUnsignedLongLong(__unpack_64(buf));
-        default:
-            PyErr_BadInternalCall();
-            return NULL;
+    if (size == 1) {
+        return PyLong_FromUnsignedLong(__unpack_8(buf));
     }
+    if (size == 2) {
+        return PyLong_FromUnsignedLong(__unpack_16(buf));
+    }
+    if (size == 4) {
+        return PyLong_FromUnsignedLong(__unpack_32(buf));
+    }
+    if (size == 8) {
+        return PyLong_FromUnsignedLongLong(__unpack_64(buf));
+    }
+    PyErr_BadInternalCall();
+    return NULL;
 }
 
 #define PyLong_FromStringAndSize(b, s, is) \
@@ -1144,15 +1147,14 @@ _PyLong_FromUnsigned(const char *buf, Py_ssize_t size)
 static PyObject *
 PyFloat_FromStringAndSize(const char *buf, Py_ssize_t size)
 {
-    switch (size) {
-        case 4:
-            return PyFloat_FromDouble(__unpack_float(buf));
-        case 8:
-            return PyFloat_FromDouble(__unpack_double(buf));
-        default:
-            PyErr_BadInternalCall();
-            return NULL;
+    if (size == 4) {
+        return PyFloat_FromDouble(__unpack_float(buf));
     }
+    if (size == 8) {
+        return PyFloat_FromDouble(__unpack_double(buf));
+    }
+    PyErr_BadInternalCall();
+    return NULL;
 }
 
 
@@ -1303,16 +1305,15 @@ __double_from_buffer(Py_buffer *msg, Py_ssize_t size, Py_ssize_t *off)
     double result = -1.0;
 
     if (!_unpack_check_off(msg, noff)) {
-        switch (size) {
-            case 4:
-                result = __unpack_float(buf);
-                break;
-            case 8:
-                result = __unpack_double(buf);
-                break;
-            default:
-                PyErr_BadInternalCall();
-                return -1.0;
+        if (size == 4) {
+            result = __unpack_float(buf);
+        }
+        else if (size == 8) {
+            result = __unpack_double(buf);
+        }
+        else {
+            PyErr_BadInternalCall();
+            return -1.0; // bail
         }
         *off = noff;
     }
@@ -1326,15 +1327,15 @@ _unpack_complex_member(Py_buffer *msg, Py_ssize_t *off)
     double result = -1.0;
 
     if ((type = _unpack_type(msg, off)) != _MSGPACK_INVALID) {
-        switch (type) {
-            case _MSGPACK_FLOAT32:
-            case _MSGPACK_FLOAT64:
-                result = __double_from_buffer(msg, _type_size(type), off);
-                break;
-            default:
-                PyErr_Format(PyExc_TypeError,
-                             "cannot unpack, invalid float type: '0x%02x'", type);
-                break;
+        if (type == _MSGPACK_FLOAT32) {
+            result = __double_from_buffer(msg, 4, off);
+        }
+        else if (type == _MSGPACK_FLOAT64) {
+            result = __double_from_buffer(msg, 8, off);
+        }
+        else {
+            PyErr_Format(PyExc_TypeError,
+                         "cannot unpack, invalid float type: '0x%02x'", type);
         }
     }
     return result;
@@ -1755,42 +1756,74 @@ _unpack_msg(Py_buffer *msg, Py_ssize_t *off)
     if ((type = _unpack_type(msg, off)) == _MSGPACK_INVALID) {
         return NULL;
     }
+    if ((type >= _MSGPACK_FIXPINT) && (type <= _MSGPACK_FIXPINTEND)) {
+        return PyLong_FromLong(type);
+    }
+    if ((type >= _MSGPACK_FIXNINT) && (type <= _MSGPACK_FIXNINTEND)) {
+        return PyLong_FromLong((int8_t)type);
+    }
+    if ((type >= _MSGPACK_FIXMAP) && (type <= _MSGPACK_FIXMAPEND)) {
+        _PyDict_FromBufferAndSize(msg, (type & _MSGPACK_FIXOBJ_BIT), off);
+    }
+    if ((type >= _MSGPACK_FIXARRAY) && (type <= _MSGPACK_FIXARRAYEND)) {
+        _PyTuple_FromBufferAndSize(msg, (type & _MSGPACK_FIXOBJ_BIT), off);
+    }
+    if ((type >= _MSGPACK_FIXSTR) && (type <= _MSGPACK_FIXSTREND)) {
+        _PyUnicode_FromBufferAndSize(msg, (type & _MSGPACK_FIXSTR_BIT), off);
+    }
     switch (type) {
-        case _MSGPACK_FIXPINT ... _MSGPACK_FIXPINTEND:
-            return PyLong_FromLong(type);
-        case _MSGPACK_FIXMAP ... _MSGPACK_FIXMAPEND:
-            _PyDict_FromBufferAndSize(msg, (type & _MSGPACK_FIXOBJ_BIT), off);
-        case _MSGPACK_FIXARRAY ... _MSGPACK_FIXARRAYEND:
-            _PyTuple_FromBufferAndSize(msg, (type & _MSGPACK_FIXOBJ_BIT), off);
-        case _MSGPACK_FIXSTR ... _MSGPACK_FIXSTREND:
-            _PyUnicode_FromBufferAndSize(msg, (type & _MSGPACK_FIXSTR_BIT), off);
         case _MSGPACK_NIL:
             Py_RETURN_NONE;
         case _MSGPACK_FALSE:
             Py_RETURN_FALSE;
         case _MSGPACK_TRUE:
             Py_RETURN_TRUE;
-        case _MSGPACK_BIN8:
-        case _MSGPACK_BIN16:
-        case _MSGPACK_BIN32:
-            _PyBytes_FromBuffer(msg, _type_size(type), off);
-        case _MSGPACK_EXT8:
-        case _MSGPACK_EXT16:
-        case _MSGPACK_EXT32:
-            _PyExtension_FromBuffer(msg, _type_size(type), off);
-        case _MSGPACK_FLOAT32:
-        case _MSGPACK_FLOAT64:
-            _PyFloat_FromBufferAndSize(msg, _type_size(type), off);
         case _MSGPACK_UINT8:
+            _PyLong_FromBufferAndSize(msg, 1, off, 0);
         case _MSGPACK_UINT16:
+            _PyLong_FromBufferAndSize(msg, 2, off, 0);
         case _MSGPACK_UINT32:
+            _PyLong_FromBufferAndSize(msg, 4, off, 0);
         case _MSGPACK_UINT64:
-            _PyLong_FromBufferAndSize(msg, _type_size(type), off, 0);
+            _PyLong_FromBufferAndSize(msg, 8, off, 0);
         case _MSGPACK_INT8:
+            _PyLong_FromBufferAndSize(msg, 1, off, 1);
         case _MSGPACK_INT16:
+            _PyLong_FromBufferAndSize(msg, 2, off, 1);
         case _MSGPACK_INT32:
+            _PyLong_FromBufferAndSize(msg, 4, off, 1);
         case _MSGPACK_INT64:
-            _PyLong_FromBufferAndSize(msg, _type_size(type), off, 1);
+            _PyLong_FromBufferAndSize(msg, 8, off, 1);
+        case _MSGPACK_FLOAT32:
+            _PyFloat_FromBufferAndSize(msg, 4, off);
+        case _MSGPACK_FLOAT64:
+            _PyFloat_FromBufferAndSize(msg, 8, off);
+        case _MSGPACK_BIN8:
+            _PyBytes_FromBuffer(msg, 1, off);
+        case _MSGPACK_BIN16:
+            _PyBytes_FromBuffer(msg, 2, off);
+        case _MSGPACK_BIN32:
+            _PyBytes_FromBuffer(msg, 4, off);
+        case _MSGPACK_STR8:
+            _PyUnicode_FromBuffer(msg, 1, off);
+        case _MSGPACK_STR16:
+            _PyUnicode_FromBuffer(msg, 2, off);
+        case _MSGPACK_STR32:
+            _PyUnicode_FromBuffer(msg, 4, off);
+        case _MSGPACK_ARRAY16:
+            _PyTuple_FromBuffer(msg, 2, off);
+        case _MSGPACK_ARRAY32:
+            _PyTuple_FromBuffer(msg, 4, off);
+        case _MSGPACK_MAP16:
+            _PyDict_FromBuffer(msg, 2, off);
+        case _MSGPACK_MAP32:
+            _PyDict_FromBuffer(msg, 4, off);
+        case _MSGPACK_EXT8:
+            _PyExtension_FromBuffer(msg, 1, off);
+        case _MSGPACK_EXT16:
+            _PyExtension_FromBuffer(msg, 2, off);
+        case _MSGPACK_EXT32:
+            _PyExtension_FromBuffer(msg, 4, off);
         case _MSGPACK_FIXEXT1:
             _PyExtension_FromBufferAndSize(msg, 1, off);
         case _MSGPACK_FIXEXT2:
@@ -1801,18 +1834,6 @@ _unpack_msg(Py_buffer *msg, Py_ssize_t *off)
             _PyExtension_FromBufferAndSize(msg, 8, off);
         case _MSGPACK_FIXEXT16:
             _PyExtension_FromBufferAndSize(msg, 16, off);
-        case _MSGPACK_STR8:
-        case _MSGPACK_STR16:
-        case _MSGPACK_STR32:
-            _PyUnicode_FromBuffer(msg, _type_size(type), off);
-        case _MSGPACK_ARRAY16:
-        case _MSGPACK_ARRAY32:
-            _PyTuple_FromBuffer(msg, _type_size(type), off);
-        case _MSGPACK_MAP16:
-        case _MSGPACK_MAP32:
-            _PyDict_FromBuffer(msg, _type_size(type), off);
-        case _MSGPACK_FIXNINT ... _MSGPACK_FIXNINTEND:
-            return PyLong_FromLong((int8_t)type);
         default:
             return PyErr_Format(PyExc_TypeError,
                                 "cannot unpack, unknown type: '0x%02x'", type);
@@ -1871,20 +1892,19 @@ _ipc_check_type(uint8_t type, Py_ssize_t len)
 {
     Py_ssize_t max = 0;
 
-    switch (type) {
-        case _MSGPACK_UINT8:
-            max = _MSGPACK_UINT8_MAX;
-            break;
-        case _MSGPACK_UINT16:
-            max = _MSGPACK_UINT16_MAX;
-            break;
-        case _MSGPACK_UINT32:
-            max = _MSGPACK_UINT32_MAX;
-            break;
-        default:
-            PyErr_Format(PyExc_TypeError,
-                         "invalid ipc type: '0x%02x'", type);
-            return _MSGPACK_INVALID;
+    if (type == _MSGPACK_UINT8) {
+        max = _MSGPACK_UINT8_MAX;
+    }
+    else if (type == _MSGPACK_UINT16) {
+        max = _MSGPACK_UINT16_MAX;
+    }
+    else if (type == _MSGPACK_UINT32) {
+        max = _MSGPACK_UINT32_MAX;
+    }
+    else {
+        PyErr_Format(PyExc_TypeError,
+                     "invalid ipc type: '0x%02x'", type);
+        return _MSGPACK_INVALID; // bail
     }
     return _ipc_check_len(type, max, len) ? _MSGPACK_INVALID : type;
 }
@@ -2010,14 +2030,11 @@ msgpack_ipc_size(PyObject *module, PyObject *args)
     if (!PyArg_ParseTuple(args, "b:ipc_size", &type)) {
         return NULL;
     }
-    switch (type) {
-        case _MSGPACK_UINT8:
-        case _MSGPACK_UINT16:
-        case _MSGPACK_UINT32:
-            break;
-        default:
-            return PyErr_Format(PyExc_TypeError,
-                                "invalid ipc type: '0x%02x'", type);
+    if ((type != _MSGPACK_UINT8) &&
+        (type != _MSGPACK_UINT16) &&
+        (type != _MSGPACK_UINT32)) {
+        return PyErr_Format(PyExc_TypeError,
+                            "invalid ipc type: '0x%02x'", type);
     }
     return PyLong_FromSsize_t(_type_size(type) + 1);
 }
