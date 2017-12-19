@@ -1055,7 +1055,7 @@ _unpack_array_len(Py_buffer *msg, Py_ssize_t *off)
     Py_ssize_t len = -1;
 
     if ((type = _unpack_type(msg, off)) != _MSGPACK_INVALID) {
-        if ((type >= _MSGPACK_FIXARRAY) && (type <= _MSGPACK_FIXARRAYEND)) {
+        if ((_MSGPACK_FIXARRAY <= type) && (type <= _MSGPACK_FIXARRAYEND)) {
             len = (type & _MSGPACK_FIXOBJ_BIT);
         }
         else if (type == _MSGPACK_ARRAY16) {
