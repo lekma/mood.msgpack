@@ -24,6 +24,7 @@
 #include "Python.h"
 
 #define _PY_INLINE_HELPERS
+#define _Py_MIN_ALLOC 32
 #include "helpers/helpers.c"
 
 
@@ -400,7 +401,7 @@ __pack_ext_type(PyObject *obj, Py_ssize_t len)
 /* -------------------------------------------------------------------------- */
 
 #define __pack__(m, s, b) \
-    __PyByteArray_Grow(((PyByteArrayObject *)(m)), (s), (b), 32)
+    __PyByteArray_Grow(((PyByteArrayObject *)(m)), (s), (b), _Py_MIN_ALLOC)
 
 
 #define __pack(m, s, b) \
@@ -555,9 +556,9 @@ __pack_double__(PyObject *msg, double value)
 static int
 __pack_len__(PyObject *msg, uint8_t type, Py_ssize_t len)
 {
-    Py_ssize_t size;
+    Py_ssize_t size = _type_size(type);
 
-    if (!(size = _type_size(type))) {
+    if (size == 0) {
         return __pack_type(msg, type);
     }
     if (size == 1) {
@@ -880,31 +881,6 @@ PyObject_Pack(PyObject *msg, PyObject *obj)
 }
 
 
-static int
-PyExtension_Pack(PyObject *msg, PyObject *obj, PyTypeObject *type)
-{
-    if (type == &PyComplex_Type) {
-        return PyComplex_Pack(msg, obj);
-    }
-    if (type == &PyByteArray_Type) {
-        return PyByteArray_Pack(msg, obj);
-    }
-    if (type == &PyList_Type) {
-        return PyList_Pack(msg, obj);
-    }
-    if (type == &PySet_Type) {
-        return PySet_Pack(msg, obj);
-    }
-    if (type == &PyFrozenSet_Type) {
-        return PyFrozenSet_Pack(msg, obj);
-    }
-    if (type == &PyType_Type) {
-        return PyType_Pack(msg, obj);
-    }
-    return PyObject_Pack(msg, obj);
-}
-
-
 /* pack --------------------------------------------------------------------- */
 
 static int
@@ -912,6 +888,7 @@ _pack_obj(PyObject *msg, PyObject *obj)
 {
     PyTypeObject *type = Py_TYPE(obj);
 
+    // std types
     if (obj == Py_None) {
         return PyNone_Pack(msg);
     }
@@ -939,7 +916,26 @@ _pack_obj(PyObject *msg, PyObject *obj)
     if (type == &PyDict_Type) {
         return PyDict_Pack(msg, obj);
     }
-    return PyExtension_Pack(msg, obj, type);
+    // extension types
+    if (type == &PyComplex_Type) {
+        return PyComplex_Pack(msg, obj);
+    }
+    if (type == &PyByteArray_Type) {
+        return PyByteArray_Pack(msg, obj);
+    }
+    if (type == &PyList_Type) {
+        return PyList_Pack(msg, obj);
+    }
+    if (type == &PySet_Type) {
+        return PySet_Pack(msg, obj);
+    }
+    if (type == &PyFrozenSet_Type) {
+        return PyFrozenSet_Pack(msg, obj);
+    }
+    if (type == &PyType_Type) {
+        return PyType_Pack(msg, obj);
+    }
+    return PyObject_Pack(msg, obj);
 }
 
 
@@ -1756,19 +1752,19 @@ _unpack_msg(Py_buffer *msg, Py_ssize_t *off)
     if ((type = _unpack_type(msg, off)) == _MSGPACK_INVALID) {
         return NULL;
     }
-    if ((type >= _MSGPACK_FIXPINT) && (type <= _MSGPACK_FIXPINTEND)) {
+    if ((_MSGPACK_FIXPINT <= type) && (type <= _MSGPACK_FIXPINTEND)) {
         return PyLong_FromLong(type);
     }
-    if ((type >= _MSGPACK_FIXNINT) && (type <= _MSGPACK_FIXNINTEND)) {
+    if ((_MSGPACK_FIXNINT <= type) && (type <= _MSGPACK_FIXNINTEND)) {
         return PyLong_FromLong((int8_t)type);
     }
-    if ((type >= _MSGPACK_FIXMAP) && (type <= _MSGPACK_FIXMAPEND)) {
+    if ((_MSGPACK_FIXMAP <= type) && (type <= _MSGPACK_FIXMAPEND)) {
         _PyDict_FromBufferAndSize(msg, (type & _MSGPACK_FIXOBJ_BIT), off);
     }
-    if ((type >= _MSGPACK_FIXARRAY) && (type <= _MSGPACK_FIXARRAYEND)) {
+    if ((_MSGPACK_FIXARRAY <= type) && (type <= _MSGPACK_FIXARRAYEND)) {
         _PyTuple_FromBufferAndSize(msg, (type & _MSGPACK_FIXOBJ_BIT), off);
     }
-    if ((type >= _MSGPACK_FIXSTR) && (type <= _MSGPACK_FIXSTREND)) {
+    if ((_MSGPACK_FIXSTR <= type) && (type <= _MSGPACK_FIXSTREND)) {
         _PyUnicode_FromBufferAndSize(msg, (type & _MSGPACK_FIXSTR_BIT), off);
     }
     switch (type) {
@@ -2030,11 +2026,14 @@ msgpack_ipc_size(PyObject *module, PyObject *args)
     if (!PyArg_ParseTuple(args, "b:ipc_size", &type)) {
         return NULL;
     }
-    if ((type != _MSGPACK_UINT8) &&
-        (type != _MSGPACK_UINT16) &&
-        (type != _MSGPACK_UINT32)) {
-        return PyErr_Format(PyExc_TypeError,
-                            "invalid ipc type: '0x%02x'", type);
+    switch (type) {
+        case _MSGPACK_UINT8:
+        case _MSGPACK_UINT16:
+        case _MSGPACK_UINT32:
+            break;
+        default:
+            return PyErr_Format(PyExc_TypeError,
+                                "invalid ipc type: '0x%02x'", type);
     }
     return PyLong_FromSsize_t(_type_size(type) + 1);
 }
