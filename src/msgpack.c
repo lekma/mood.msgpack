@@ -1016,10 +1016,8 @@ __unpack_len(const char *buf, Py_ssize_t size)
 }
 
 
-/* -------------------------------------------------------------------------- */
-
 static inline int
-_unpack_check_noff(Py_buffer *msg, Py_ssize_t noff)
+__unpack_check_noff(Py_buffer *msg, Py_ssize_t noff)
 {
     if (noff > msg->len) {
         PyErr_SetString(PyExc_EOFError, "Ran out of input");
@@ -1030,12 +1028,12 @@ _unpack_check_noff(Py_buffer *msg, Py_ssize_t noff)
 
 
 static inline uint8_t
-_unpack_type(Py_buffer *msg, Py_ssize_t *off)
+__unpack_type(Py_buffer *msg, Py_ssize_t *off)
 {
     Py_ssize_t _off = *off, noff = _off + 1;
     uint8_t type = _MSGPACK_INVALID;
 
-    if (!_unpack_check_noff(msg, noff)) {
+    if (!__unpack_check_noff(msg, noff)) {
         if ((type = ((uint8_t *)((msg->buf) + _off))[0]) == _MSGPACK_INVALID) {
             PyErr_Format(PyExc_TypeError,
                          "type '0x%02x' is invalid", _MSGPACK_INVALID);
@@ -1047,12 +1045,12 @@ _unpack_type(Py_buffer *msg, Py_ssize_t *off)
 
 
 static inline const char *
-_unpack_buf(Py_buffer *msg, Py_ssize_t size, Py_ssize_t *off)
+__unpack_buf(Py_buffer *msg, Py_ssize_t size, Py_ssize_t *off)
 {
     Py_ssize_t _off = *off, noff = _off + size;
     const char *buf = NULL;
 
-    if (!_unpack_check_noff(msg, noff)) {
+    if (!__unpack_check_noff(msg, noff)) {
         buf = ((msg->buf) + _off);
         *off = noff;
     }
@@ -1060,13 +1058,15 @@ _unpack_buf(Py_buffer *msg, Py_ssize_t size, Py_ssize_t *off)
 }
 
 
+/* -------------------------------------------------------------------------- */
+
 static Py_ssize_t
 _unpack_len(Py_buffer *msg, Py_ssize_t size, Py_ssize_t *off)
 {
     const char *buf = NULL;
     Py_ssize_t len = -1;
 
-    if ((buf = _unpack_buf(msg, size, off))) {
+    if ((buf = __unpack_buf(msg, size, off))) {
         len = __unpack_len(buf, size);
     }
     return len;
@@ -1079,7 +1079,7 @@ _unpack_array_len(Py_buffer *msg, Py_ssize_t *off)
     uint8_t type = _MSGPACK_INVALID;
     Py_ssize_t len = -1;
 
-    if ((type = _unpack_type(msg, off)) != _MSGPACK_INVALID) {
+    if ((type = __unpack_type(msg, off)) != _MSGPACK_INVALID) {
         if ((_MSGPACK_FIXARRAY <= type) && (type <= _MSGPACK_FIXARRAYEND)) {
             len = (type & _MSGPACK_FIXOBJ_BIT);
         }
@@ -1105,7 +1105,7 @@ _unpack_registered(Py_buffer *msg, Py_ssize_t size, Py_ssize_t *off)
     msgpack_state *state = NULL;
     PyObject *result = NULL, *key = NULL;
 
-    if ((buf = _unpack_buf(msg, size, off)) &&
+    if ((buf = __unpack_buf(msg, size, off)) &&
         (state = msgpack_getstate()) &&
         (key = PyBytes_FromStringAndSize(buf, size))) {
         if ((result = PyDict_GetItem(state->registry, key))) { // borrowed
@@ -1263,11 +1263,10 @@ PySet_FromBufferAndSize(Py_buffer *msg, Py_ssize_t len, Py_ssize_t *off, int fro
 #define __PyObject_FromBufferAndSize(t, m, s, o, ...) \
     do { \
         const char *b = NULL; \
-        PyObject *r = NULL; \
-        if ((b = _unpack_buf((m), (s), (o)))) { \
-            r = t##_FromStringAndSize(b, (s), ##__VA_ARGS__); \
+        if (!(b = __unpack_buf((m), (s), (o)))) { \
+            return NULL; \
         } \
-        return r; \
+        return t##_FromStringAndSize(b, (s), ##__VA_ARGS__); \
     } while (0)
 
 #define _PyLong_FromBufferAndSize(m, s, o, is) \
@@ -1320,7 +1319,7 @@ __double_from_buffer(Py_buffer *msg, Py_ssize_t size, Py_ssize_t *off)
     const char *buf = NULL;
     double result = -1.0;
 
-    if ((buf = _unpack_buf(msg, size, off))) {
+    if ((buf = __unpack_buf(msg, size, off))) {
         if (size == 4) {
             result = __unpack_float(buf);
         }
@@ -1340,7 +1339,7 @@ _unpack_complex_member(Py_buffer *msg, Py_ssize_t *off)
     uint8_t type = _MSGPACK_INVALID;
     double result = -1.0;
 
-    if ((type = _unpack_type(msg, off)) != _MSGPACK_INVALID) {
+    if ((type = __unpack_type(msg, off)) != _MSGPACK_INVALID) {
         if (type == _MSGPACK_FLOAT32) {
             result = __double_from_buffer(msg, 4, off);
         }
@@ -1377,22 +1376,21 @@ PyComplex_FromBuffer(Py_buffer *msg, Py_ssize_t *off)
 
 /* _MSGPACK_PYEXT_LIST, _MSGPACK_PYEXT_SET, _MSGPACK_PYEXT_FROZENSET */
 #define _PyList_FromBufferAndSize(m, s, o) \
-    PySequence_FromBufferAndSize((m), (s), (o), 1)
+    return PySequence_FromBufferAndSize((m), (s), (o), 1)
 
 #define _PySet_FromBufferAndSize(m, s, o) \
-    PySet_FromBufferAndSize((m), (s), (o), 0)
+    return PySet_FromBufferAndSize((m), (s), (o), 0)
 
 #define _PyFrozenSet_FromBufferAndSize(m, s, o) \
-    PySet_FromBufferAndSize((m), (s), (o), 1)
+    return PySet_FromBufferAndSize((m), (s), (o), 1)
 
 #define __PySequence_FromBuffer(t, m, o) \
     do { \
-        PyObject *r = NULL; \
         Py_ssize_t l = -1; \
-        if ((l = _unpack_array_len((m), (o))) >= 0) { \
-            r = _##t##_FromBufferAndSize((m), l, (o)); \
+        if ((l = _unpack_array_len((m), (o))) < 0) { \
+            return NULL; \
         } \
-        return r; \
+        _##t##_FromBufferAndSize((m), l, (o)); \
     } while (0)
 
 #define _PyList_FromBuffer(m, o) \
@@ -1703,7 +1701,7 @@ PyInstance_FromBufferAndSize(Py_buffer *msg, Py_ssize_t size, Py_ssize_t *off)
     Py_ssize_t _off = *off, noff = _off + size;
     PyObject *result = NULL, *reduce = NULL;
 
-    if (!_unpack_check_noff(msg, noff) && (reduce = _unpack_msg(msg, off))) {
+    if (!__unpack_check_noff(msg, noff) && (reduce = _unpack_msg(msg, off))) {
         result = _PyInstance_New(reduce);
         Py_DECREF(reduce);
     }
@@ -1726,7 +1724,7 @@ PyExtension_FromBufferAndSize(Py_buffer *msg, Py_ssize_t size, Py_ssize_t *off)
 {
     uint8_t type = _MSGPACK_INVALID;
 
-    if ((type = _unpack_type(msg, off)) == _MSGPACK_INVALID) {
+    if ((type = __unpack_type(msg, off)) == _MSGPACK_INVALID) {
         return NULL;
     }
     switch (type) {
@@ -1769,7 +1767,7 @@ _unpack_msg(Py_buffer *msg, Py_ssize_t *off)
 {
     uint8_t type = _MSGPACK_INVALID;
 
-    if ((type = _unpack_type(msg, off)) == _MSGPACK_INVALID) {
+    if ((type = __unpack_type(msg, off)) == _MSGPACK_INVALID) {
         return NULL;
     }
     if ((_MSGPACK_FIXPINT <= type) && (type <= _MSGPACK_FIXPINTEND)) {
