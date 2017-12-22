@@ -1019,9 +1019,9 @@ __unpack_len(const char *buf, Py_ssize_t size)
 /* -------------------------------------------------------------------------- */
 
 static inline int
-_unpack_check_off(Py_buffer *msg, Py_ssize_t off)
+_unpack_check_noff(Py_buffer *msg, Py_ssize_t noff)
 {
-    if (off > msg->len) {
+    if (noff > msg->len) {
         PyErr_SetString(PyExc_EOFError, "Ran out of input");
         return -1;
     }
@@ -1035,8 +1035,8 @@ _unpack_type(Py_buffer *msg, Py_ssize_t *off)
     Py_ssize_t _off = *off, noff = _off + 1;
     uint8_t type = _MSGPACK_INVALID;
 
-    if (!_unpack_check_off(msg, noff)) {
-        if ((type = (((char *)msg->buf) + _off)[0]) == _MSGPACK_INVALID) {
+    if (!_unpack_check_noff(msg, noff)) {
+        if ((type = ((uint8_t *)((msg->buf) + _off))[0]) == _MSGPACK_INVALID) {
             PyErr_Format(PyExc_TypeError,
                          "type '0x%02x' is invalid", _MSGPACK_INVALID);
         }
@@ -1046,16 +1046,28 @@ _unpack_type(Py_buffer *msg, Py_ssize_t *off)
 }
 
 
+static inline const char *
+_unpack_buf(Py_buffer *msg, Py_ssize_t size, Py_ssize_t *off)
+{
+    Py_ssize_t _off = *off, noff = _off + size;
+    const char *buf = NULL;
+
+    if (!_unpack_check_noff(msg, noff)) {
+        buf = ((msg->buf) + _off);
+        *off = noff;
+    }
+    return buf;
+}
+
+
 static Py_ssize_t
 _unpack_len(Py_buffer *msg, Py_ssize_t size, Py_ssize_t *off)
 {
-    Py_ssize_t _off = *off, noff = _off + size;
-    char *buf = ((char *)msg->buf) + _off;
+    const char *buf = NULL;
     Py_ssize_t len = -1;
 
-    if (!_unpack_check_off(msg, noff) &&
-        (len = __unpack_len(buf, size)) >= 0) {
-        *off = noff;
+    if ((buf = _unpack_buf(msg, size, off))) {
+        len = __unpack_len(buf, size);
     }
     return len;
 }
@@ -1089,17 +1101,15 @@ _unpack_array_len(Py_buffer *msg, Py_ssize_t *off)
 static PyObject *
 _unpack_registered(Py_buffer *msg, Py_ssize_t size, Py_ssize_t *off)
 {
+    const char *buf = NULL;
     msgpack_state *state = NULL;
     PyObject *result = NULL, *key = NULL;
-    Py_ssize_t _off = *off, noff = _off + size;
-    char *buf = ((char *)msg->buf) + _off;
 
-    if ((state = msgpack_getstate()) &&
-        !_unpack_check_off(msg, noff) &&
+    if ((buf = _unpack_buf(msg, size, off)) &&
+        (state = msgpack_getstate()) &&
         (key = PyBytes_FromStringAndSize(buf, size))) {
         if ((result = PyDict_GetItem(state->registry, key))) { // borrowed
             Py_INCREF(result);
-            *off = noff;
         }
         Py_DECREF(key);
     }
@@ -1252,12 +1262,10 @@ PySet_FromBufferAndSize(Py_buffer *msg, Py_ssize_t len, Py_ssize_t *off, int fro
 
 #define __PyObject_FromBufferAndSize(t, m, s, o, ...) \
     do { \
+        const char *b = NULL; \
         PyObject *r = NULL; \
-        Py_ssize_t _o = *(o), no = _o + (s); \
-        char *b = ((char *)(m)->buf) + _o; \
-        if (!_unpack_check_off((m), no) && \
-            (r = t##_FromStringAndSize(b, (s), ##__VA_ARGS__))) { \
-            *(o) = no; \
+        if ((b = _unpack_buf((m), (s), (o)))) { \
+            r = t##_FromStringAndSize(b, (s), ##__VA_ARGS__); \
         } \
         return r; \
     } while (0)
@@ -1309,11 +1317,10 @@ PySet_FromBufferAndSize(Py_buffer *msg, Py_ssize_t len, Py_ssize_t *off, int fro
 static double
 __double_from_buffer(Py_buffer *msg, Py_ssize_t size, Py_ssize_t *off)
 {
-    Py_ssize_t _off = *off, noff = _off + size;
-    char *buf = ((char *)msg->buf) + _off;
+    const char *buf = NULL;
     double result = -1.0;
 
-    if (!_unpack_check_off(msg, noff)) {
+    if ((buf = _unpack_buf(msg, size, off))) {
         if (size == 4) {
             result = __unpack_float(buf);
         }
@@ -1322,9 +1329,7 @@ __double_from_buffer(Py_buffer *msg, Py_ssize_t size, Py_ssize_t *off)
         }
         else {
             PyErr_BadInternalCall();
-            return -1.0; // bail
         }
-        *off = noff;
     }
     return result;
 }
@@ -1427,10 +1432,11 @@ __PyClass_ErrFromBuffer(Py_buffer *msg, Py_ssize_t *off)
 static PyObject *
 PyClass_FromBufferAndSize(Py_buffer *msg, Py_ssize_t size, Py_ssize_t *off)
 {
+    Py_ssize_t _off = *off; // keep the original offset in case of error
     PyObject *result = NULL;
 
     if (!(result = _unpack_registered(msg, size, off))) {
-        __PyClass_ErrFromBuffer(msg, off);
+        __PyClass_ErrFromBuffer(msg, &_off);
     }
     return result;
 }
@@ -1452,10 +1458,11 @@ __PySingleton_ErrFromBuffer(Py_buffer *msg, Py_ssize_t *off)
 static PyObject *
 PySingleton_FromBufferAndSize(Py_buffer *msg, Py_ssize_t size, Py_ssize_t *off)
 {
+    Py_ssize_t _off = *off; // keep the original offset in case of error
     PyObject *result = NULL;
 
     if (!(result = _unpack_registered(msg, size, off))) {
-        __PySingleton_ErrFromBuffer(msg, off);
+        __PySingleton_ErrFromBuffer(msg, &_off);
     }
     return result;
 }
@@ -1693,10 +1700,10 @@ _PyInstance_New(PyObject *reduce)
 static PyObject *
 PyInstance_FromBufferAndSize(Py_buffer *msg, Py_ssize_t size, Py_ssize_t *off)
 {
-    PyObject *result = NULL, *reduce = NULL;
     Py_ssize_t _off = *off, noff = _off + size;
+    PyObject *result = NULL, *reduce = NULL;
 
-    if (!_unpack_check_off(msg, noff) && (reduce = _unpack_msg(msg, off))) {
+    if (!_unpack_check_noff(msg, noff) && (reduce = _unpack_msg(msg, off))) {
         result = _PyInstance_New(reduce);
         Py_DECREF(reduce);
     }
