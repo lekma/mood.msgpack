@@ -1016,43 +1016,46 @@ __unpack_len(const char *buf, Py_ssize_t size)
 }
 
 
-static inline int
-__unpack_check_noff(Py_buffer *msg, Py_ssize_t noff)
+/* -------------------------------------------------------------------------- */
+
+static Py_ssize_t
+__unpack_offset(Py_buffer *msg, Py_ssize_t size, Py_ssize_t *off)
 {
+    Py_ssize_t _off = *off, noff = _off + size;
+
     if (noff > msg->len) {
         PyErr_SetString(PyExc_EOFError, "Ran out of input");
         return -1;
     }
-    return 0;
+    *off = noff;
+    return _off;
 }
 
 
-static inline uint8_t
+static uint8_t
 __unpack_type(Py_buffer *msg, Py_ssize_t *off)
 {
-    Py_ssize_t _off = *off, noff = _off + 1;
+    Py_ssize_t _off = -1;
     uint8_t type = _MSGPACK_INVALID;
 
-    if (!__unpack_check_noff(msg, noff)) {
+    if ((_off = __unpack_offset(msg, 1, off)) >= 0) {
         if ((type = ((uint8_t *)((msg->buf) + _off))[0]) == _MSGPACK_INVALID) {
             PyErr_Format(PyExc_TypeError,
                          "type '0x%02x' is invalid", _MSGPACK_INVALID);
         }
-        *off = noff;
     }
     return type;
 }
 
 
-static inline const char *
+static const char *
 __unpack_buf(Py_buffer *msg, Py_ssize_t size, Py_ssize_t *off)
 {
-    Py_ssize_t _off = *off, noff = _off + size;
+    Py_ssize_t _off = -1;
     const char *buf = NULL;
 
-    if (!__unpack_check_noff(msg, noff)) {
+    if ((_off = __unpack_offset(msg, size, off)) >= 0) {
         buf = ((msg->buf) + _off);
-        *off = noff;
     }
     return buf;
 }
@@ -1698,10 +1701,11 @@ _PyInstance_New(PyObject *reduce)
 static PyObject *
 PyInstance_FromBufferAndSize(Py_buffer *msg, Py_ssize_t size, Py_ssize_t *off)
 {
-    Py_ssize_t _off = *off, noff = _off + size;
+    Py_ssize_t _off = -1;
     PyObject *result = NULL, *reduce = NULL;
 
-    if (!__unpack_check_noff(msg, noff) && (reduce = _unpack_msg(msg, off))) {
+    if (((_off = __unpack_offset(msg, size, off)) >= 0) &&
+        (reduce = _unpack_msg(msg, &_off))) {
         result = _PyInstance_New(reduce);
         Py_DECREF(reduce);
     }
@@ -1776,14 +1780,14 @@ _unpack_msg(Py_buffer *msg, Py_ssize_t *off)
     if ((_MSGPACK_FIXNINT <= type) && (type <= _MSGPACK_FIXNINTEND)) {
         return PyLong_FromLong((int8_t)type);
     }
-    if ((_MSGPACK_FIXMAP <= type) && (type <= _MSGPACK_FIXMAPEND)) {
-        _PyDict_FromBufferAndSize(msg, (type & _MSGPACK_FIXOBJ_BIT), off);
+    if ((_MSGPACK_FIXSTR <= type) && (type <= _MSGPACK_FIXSTREND)) {
+        _PyUnicode_FromBufferAndSize(msg, (type & _MSGPACK_FIXSTR_BIT), off);
     }
     if ((_MSGPACK_FIXARRAY <= type) && (type <= _MSGPACK_FIXARRAYEND)) {
         _PyTuple_FromBufferAndSize(msg, (type & _MSGPACK_FIXOBJ_BIT), off);
     }
-    if ((_MSGPACK_FIXSTR <= type) && (type <= _MSGPACK_FIXSTREND)) {
-        _PyUnicode_FromBufferAndSize(msg, (type & _MSGPACK_FIXSTR_BIT), off);
+    if ((_MSGPACK_FIXMAP <= type) && (type <= _MSGPACK_FIXMAPEND)) {
+        _PyDict_FromBufferAndSize(msg, (type & _MSGPACK_FIXOBJ_BIT), off);
     }
     switch (type) {
         case _MSGPACK_NIL:
