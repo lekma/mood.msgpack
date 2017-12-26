@@ -38,8 +38,8 @@ Module Interface
 .. _registered:
 
 register(object)
-  Adds the object to the *registry*. The argument object must be a class or a
-  singleton (instance whose ``__reduce__`` method returns a string).
+  Adds the object to the *registry*. The argument must be a class or a singleton
+  (instance whose ``__reduce__`` method returns a string).
 
 pack(object)
   Return the packed representation of the object as a bytearray object.
@@ -63,8 +63,7 @@ copy/paste from the `pickle module object.__reduce__() documentation
 
 object.__reduce__()
   The interface is currently defined as follows: the ``__reduce__`` method takes
-  no argument and shall return either a unique string or preferably a tuple (the
-  returned object is often referred to as the "reduce value").
+  no argument and shall return either a unique string or preferably a tuple.
 
   If a string is returned, the string should be interpreted as the name of a
   global variable. This behaviour is typically useful for singletons (and is the
