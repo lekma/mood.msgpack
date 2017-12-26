@@ -23,10 +23,10 @@ The following types can be packed:
 
 * strings, bytes, bytearrays
 
-* tuples, lists, sets, frozesets, and dictionaries containing only packable
+* tuples, lists, sets, frozensets, and dictionaries containing only packable
   objects
 
-* classes (***must*** be `registered`_ in order to be unpacked)
+* classes (these **must** be `registered`_ in order to be unpacked)
 
 * instances of classes whose ``__reduce__`` method conforms to the interface
   defined in `Packing Class Instances`_
@@ -37,14 +37,16 @@ Module Interface
 
 .. _registered:
 
-register(obj)
-  placeholder
+register(object)
+  Adds the object to the *registry*. The argument object must be a class or a
+  singleton (instance whose ``__reduce__`` method returns a string).
 
-pack(obj)
-  placeholder
+pack(object)
+  Return the packed representation of the object as a bytearray object.
 
-unpack(msg)
-  placeholder
+unpack(message)
+  Read a packed object hierarchy from a bytes-like object and return the
+  reconstituted object hierarchy specified therein.
 
 
 Packing Class Instances
@@ -61,7 +63,7 @@ copy/paste from the `pickle module object.__reduce__() documentation
 
 object.__reduce__()
   The interface is currently defined as follows: the ``__reduce__`` method takes
-  no argument and shall return either a string or preferably a tuple (the
+  no argument and shall return either a unique string or preferably a tuple (the
   returned object is often referred to as the "reduce value").
 
   If a string is returned, the string should be interpreted as the name of a
@@ -72,8 +74,8 @@ object.__reduce__()
   Optional items can either be omitted, or ``None`` can be provided as their
   value. The semantics of each item are in order:
 
-  * A callable object that will be called to create the initial version of the
-    object (**must** be `registered`_ in order to be unpacked).
+  * A callable object that will be invoked to create the initial version of the
+    object (it **must** be `registered`_ in order to be unpacked).
 
   * A tuple of arguments for the callable object. An empty tuple must be given
     if the callable does not accept any argument.
@@ -91,7 +93,7 @@ object.__reduce__()
     (equivalent to ``object += items``).
 
   * Optionally, a dict/mapping or a sequence/iterator yielding successive
-    key-value pairs.  These pairs will be stored to the object using
+    key-value pairs.  These pairs will be stored in the object using
     ``object.update(pairs)``. This is primarily used for dictionary subclasses,
     but may be used by other classes as long as they have an ``update`` method
     with the appropriate signature. If the object has no such method then, an
