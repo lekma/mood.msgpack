@@ -8,6 +8,18 @@ format. It lets you exchange data among multiple languages like JSON. But it's
 faster and smaller. Small integers are encoded into a single byte, and typical
 short strings require only one extra byte in addition to the strings themselves.
 
+**Note:** This implementation is not geared towards inter language exchange but
+towards serialization/de-serialization of Python object structures (it was
+designed as a `pickle <https://docs.python.org/3.5/library/pickle.html>`_
+substitute). It does not expose MessagePack's extensions mechanism but uses it
+internally to pack/unpack non-standard types.
+That said, if you only deal with standard objects/types (``None``, ``True``,
+``False``, integers, floating point numbers, bytes, unicode, tuples and
+dictionaries) you are fine to use this module to produce or consume data that is
+targeted at or originates from other programming languages.
+The following documentation is largely adapted from Python's `pickle module
+documentation <https://docs.python.org/3.5/library/pickle.html>`_.
+
 **See also:** `MessagePack specification
 <https://github.com/msgpack/msgpack/blob/master/spec.md>`_
 
@@ -38,26 +50,25 @@ Module Interface
 .. _registered:
 
 register(object)
-  Adds the object to the *registry*. The argument must be a class or a singleton
+  Add *object* to the *registry*. *object* must be a class or a singleton
   (instance whose ``__reduce__`` method returns a string).
 
 pack(object)
-  Return the packed representation of the object as a bytearray object.
+  Return the packed representation of *object* as a bytearray object.
 
 unpack(message)
-  Read a packed object hierarchy from a bytes-like object and return the
-  reconstituted object hierarchy specified therein.
+  Read a packed object hierarchy from a `bytes-like
+  <https://docs.python.org/3.5/glossary.html#term-bytes-like-object>`_
+  *message* and return the reconstituted object hierarchy specified therein.
 
 
 Packing Class Instances
 -----------------------
 
-**Note:** This is largely based on Python's `pickle
-<https://docs.python.org/3.5/library/pickle.html>`_ module, this means most
-built-in objects and most objects defined in the standard library already
-conform to this interface (also most of the following documentation is a
-copy/paste from the `pickle module object.__reduce__() documentation
-<https://docs.python.org/3.5/library/pickle.html#object.__reduce__>`_).
+**Note:** This being chiefly based on `pickle's object.__reduce__() interface
+<https://docs.python.org/3.5/library/pickle.html#object.__reduce__>`_,
+most built-in objects and most objects defined in the Python standard library
+already conform to it.
 
 .. _reduce:
 
