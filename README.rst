@@ -109,30 +109,32 @@ object.__reduce__()
     with the appropriate signature. If the object has no such method then, an
     attempt will be made to store these pairs using ``object[key] = value``.
 
-  A simple example::
+  A simple example:
 
-    >>> from mood.msgpack import pack, unpack, register
-    >>> class Kiki(object):
-    ...     def __init__(self, a, b):
-    ...         self.a = a
-    ...         self.b = b
-    ...     def __repr__(self):
-    ...         return "<Kiki object: a={0.a}, b={0.b}>".format(self)
-    ...     def __reduce__(self):
-    ...         return (Kiki, (self.a, self.b))
-    ...
-    >>> k = Kiki(1, 2)
-    >>> k
-    <Kiki object: a=1, b=2>
-    >>> b = pack(k)
-    >>> b
-    bytearray(b'\xc7\x15\x7f\x92\xc7\x0e\x06\xa8__main__\xa4Kiki\x92\x01\x02')
-    >>> unpack(b)
-    Traceback (most recent call last):
-      File "<stdin>", line 1, in <module>
-    TypeError: cannot unpack <class '__main__.Kiki'>
-    >>> register(Kiki)
-    >>> unpack(b)
-    <Kiki object: a=1, b=2>
-    >>>
+  .. code:: python
+
+      >>> from mood.msgpack import pack, unpack, register
+      >>> class Kiki(object):
+      ...     def __init__(self, a, b):
+      ...         self.a = a
+      ...         self.b = b
+      ...     def __repr__(self):
+      ...         return "<Kiki object: a={0.a}, b={0.b}>".format(self)
+      ...     def __reduce__(self):
+      ...         return (Kiki, (self.a, self.b))
+      ...
+      >>> k = Kiki(1, 2)
+      >>> k
+      <Kiki object: a=1, b=2>
+      >>> b = pack(k)
+      >>> b
+      bytearray(b'\xc7\x15\x7f\x92\xc7\x0e\x06\xa8__main__\xa4Kiki\x92\x01\x02')
+      >>> unpack(b)
+      Traceback (most recent call last):
+        File "<stdin>", line 1, in <module>
+      TypeError: cannot unpack <class '__main__.Kiki'>
+      >>> register(Kiki)
+      >>> unpack(b)
+      <Kiki object: a=1, b=2>
+      >>>
 
