@@ -41,6 +41,10 @@ setup(
       long_description_content_type="text",
 
       url="https://github.com/lekma/mood.msgpack",
+      download_url="https://github.com/lekma/mood.msgpack/releases",
+      project_urls={
+          "Bug Tracker": "https://github.com/lekma/mood.msgpack/issues"
+      },
       author="Malek Hadj-Ali",
       author_email="lekmalek@gmail.com",
       license="GNU General Public License v3 (GPLv3)",
@@ -55,16 +59,15 @@ setup(
 
       ext_package="mood",
       ext_modules=[
-                   Extension("msgpack", ["src/msgpack.c"],
-                             define_macros=[PKG_VERSION])
+          Extension("msgpack", ["src/msgpack.c"], define_macros=[PKG_VERSION])
       ],
 
       classifiers=[
-                   "Development Status :: 3 - Alpha",
-                   "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
-                   "Operating System :: POSIX",
-                   "Programming Language :: Python :: 3.5",
-                   "Programming Language :: Python :: Implementation :: CPython"
+          "Development Status :: 3 - Alpha",
+          "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+          "Operating System :: POSIX",
+          "Programming Language :: Python :: 3.5",
+          "Programming Language :: Python :: Implementation :: CPython"
       ]
 )
 
