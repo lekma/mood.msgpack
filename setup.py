@@ -27,7 +27,7 @@ from os.path import abspath
 
 
 pkg_name = "mood.msgpack"
-pkg_version = "0.1.0"
+pkg_version = "1.0.0"
 pkg_desc = "Python MessagePack implementation"
 
 PKG_VERSION = ("PKG_VERSION", "\"{0}\"".format(pkg_version))
@@ -63,7 +63,8 @@ setup(
       ],
 
       classifiers=[
-          "Development Status :: 3 - Alpha",
+          "Development Status :: 5 - Production/Stable",
+          "Intended Audience :: Developers",
           "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
           "Operating System :: POSIX",
           "Programming Language :: Python :: 3.5",
