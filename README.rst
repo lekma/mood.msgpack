@@ -14,7 +14,7 @@ designed as a `pickle <https://docs.python.org/3.5/library/pickle.html>`_
 substitute). It does not expose MessagePack's extensions mechanism but uses it
 internally to pack/unpack non-standard types.
 That said, if you only deal with standard objects/types (``None``, ``True``,
-``False``, integers, floating point numbers, bytes, unicode, tuples and
+``False``, integers, floating point numbers, bytes, strings, tuples and
 dictionaries) you are fine to use this module to produce or consume data that is
 targeted at or originates from other programming languages.
 The following documentation is largely adapted from Python's `pickle module
@@ -24,19 +24,29 @@ documentation <https://docs.python.org/3.5/library/pickle.html>`_.
 <https://github.com/msgpack/msgpack/blob/master/spec.md>`_
 
 
+-----
+
+
 What can be packed and unpacked?
 --------------------------------
 
-The following types can be packed:
+The following standard types can be packed/unpacked:
 
-* ``None``, ``True``, and ``False``
+* ``None``, ``True`` and ``False``
 
-* integers, floating point numbers, complex numbers
+* integers, floating point numbers
 
-* strings, bytes, bytearrays
+* strings, bytes
 
-* tuples, lists, sets, frozensets, and dictionaries containing only packable
-  objects
+* tuples and dictionaries containing only packable objects
+
+Additionally, the following Python types are supported by default:
+
+* complex numbers
+
+* bytearrays
+
+* lists, sets and frozensets containing only packable objects
 
 * classes (these **must** be `registered`_ in order to be unpacked)
 
