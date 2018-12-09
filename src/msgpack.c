@@ -453,13 +453,13 @@ __pack_64(PyObject *msg, uint8_t type, uint64_t value)
 }
 
 
-static int
+/*static int
 __pack_float(PyObject *msg, float value)
 {
     float_value fval = { .f = value };
 
     return __pack_32(msg, _MSGPACK_FLOAT32, fval.u32);
-}
+}*/
 
 
 static int
@@ -540,7 +540,7 @@ __pack_long__(PyObject *msg, int64_t value)
 }
 
 
-static int
+/*static int
 __pack_double__(PyObject *msg, double value)
 {
     // NOTE: this is not the same as FLT_MAX
@@ -550,7 +550,7 @@ __pack_double__(PyObject *msg, double value)
         return __pack_float(msg, (float)value);
     }
     return __pack_double(msg, value);
-}
+}*/
 
 
 static int
@@ -701,7 +701,7 @@ PyLong_Pack(PyObject *msg, PyObject *obj)
 
 
 #define PyFloat_Pack(msg, obj) \
-    __pack_double__((msg), PyFloat_AS_DOUBLE((obj)))
+    __pack_double((msg), PyFloat_AS_DOUBLE((obj)))
 
 
 static int
@@ -793,8 +793,8 @@ PyComplex_Pack(PyObject *msg, PyObject *obj)
     int res = -1;
 
     if ((data = PyByteArray_FromStringAndSize(NULL, 0))) {
-        if (!__pack_double__(data, complex.real) &&
-            !__pack_double__(data, complex.imag)) {
+        if (!__pack_double(data, complex.real) &&
+            !__pack_double(data, complex.imag)) {
             res = _pack_ext(msg, _MSGPACK_PYEXT_COMPLEX, data);
         }
         Py_DECREF(data);
