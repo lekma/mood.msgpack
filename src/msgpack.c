@@ -22,10 +22,17 @@
 
 #define PY_SSIZE_T_CLEAN
 #include "Python.h"
+#include "structmember.h"
 
 #define _PY_INLINE_HELPERS
 #define _Py_MIN_ALLOC 32
 #include "helpers/helpers.c"
+
+
+/* we need a 64bit type */
+#if !defined(HAVE_LONG_LONG)
+#error "msgpack needs a long long integer type"
+#endif /* HAVE_LONG_LONG */
 
 
 /* endian.h is the POSIX way(?) */
@@ -34,7 +41,7 @@
 #elif defined(HAVE_SYS_ENDIAN_H)
 #include <sys/endian.h>
 #else
-#error msgpack needs <endian.h> or <sys/endian.h>
+#error "msgpack needs <endian.h> or <sys/endian.h>"
 #endif
 
 
@@ -83,6 +90,211 @@ _init_state(PyObject *module)
     }
     return 0;
 }
+
+
+/* ----------------------------------------------------------------------------
+ Timestamp
+ ---------------------------------------------------------------------------- */
+
+typedef struct {
+    PyObject_HEAD
+    int64_t seconds;
+    uint32_t nanoseconds;
+} Timestamp;
+
+
+#define _MSGPACK_NS_MAX 1e9
+
+#define trunc_round(d) trunc(((d) < 0) ? ((d) - .5) : ((d) + .5))
+
+
+/* Timestamp_Type helpers --------------------------------------------------- */
+
+static PyObject *
+_Timestamp_New(PyTypeObject *type, int64_t seconds, uint32_t nanoseconds)
+{
+    Timestamp *self = NULL;
+
+    if (nanoseconds < _MSGPACK_NS_MAX) {
+        if ((self = (Timestamp *)type->tp_alloc(type, 0))) {
+            self->seconds = seconds;
+            self->nanoseconds = nanoseconds;
+        }
+    }
+    else {
+        PyErr_SetString(PyExc_OverflowError,
+                        "argument 'nanoseconds' greater than maximum");
+    }
+    return (PyObject *)self;
+}
+
+
+static PyObject *
+_Timestamp_FromPyFloat(PyTypeObject *type, PyObject *timestamp)
+{
+    double value = PyFloat_AS_DOUBLE(timestamp), intpart, fracpart, diff;
+    int64_t seconds;
+
+    fracpart = fabs(modf(value, &intpart)) * _MSGPACK_NS_MAX;
+    seconds = (int64_t)trunc_round(intpart);
+    diff = intpart - (double)seconds;
+    if (((intpart < LLONG_MIN) || (LLONG_MAX < intpart)) ||
+        ((diff <= -1.0) || (1.0 <= diff))) {
+        PyErr_SetString(PyExc_OverflowError,
+                        "timestamp out of range for platform");
+        return NULL;
+    }
+    return _Timestamp_New(type, seconds, (uint32_t)trunc_round(fracpart));
+}
+
+
+static PyObject *
+_Timestamp_FromPyLong(PyTypeObject *type, PyObject *timestamp)
+{
+    int64_t seconds = 0;
+
+    if (((seconds = PyLong_AsLongLong(timestamp)) == -1) && PyErr_Occurred()) {
+        return NULL;
+    }
+    return _Timestamp_New(type, seconds, 0);
+}
+
+
+/* Timestamp_Type ----------------------------------------------------------- */
+
+/* Timestamp_Type.tp_dealloc */
+static void
+Timestamp_tp_dealloc(Timestamp *self)
+{
+    Py_TYPE(self)->tp_free((PyObject*)self);
+}
+
+
+/* Timestamp_Type.tp_repr */
+static PyObject *
+Timestamp_tp_repr(Timestamp *self)
+{
+    return PyUnicode_FromFormat("%s(%lld.%09u)", Py_TYPE(self)->tp_name,
+                                self->seconds, self->nanoseconds);
+}
+
+
+/* Timestamp_Type.tp_doc */
+PyDoc_STRVAR(Timestamp_tp_doc,
+"Timestamp(seconds[, nanoseconds=0])");
+
+
+/* Timestamp.fromtimestamp() */
+PyDoc_STRVAR(Timestamp_fromtimestamp_doc,
+"@classmethod\n\
+fromtimestamp(timestamp) -> Timestamp");
+
+static PyObject *
+Timestamp_fromtimestamp(PyObject *cls, PyObject *timestamp)
+{
+    PyTypeObject *type = (PyTypeObject *)cls;
+
+    if (PyFloat_Check(timestamp)) {
+        return _Timestamp_FromPyFloat(type, timestamp);
+    }
+    else if (PyLong_Check(timestamp)) {
+        return _Timestamp_FromPyLong(type, timestamp);
+    }
+    return PyErr_Format(PyExc_TypeError,
+                        "expected a 'float' or an 'int', got: '%.200s'",
+                        Py_TYPE(timestamp)->tp_name);
+}
+
+
+/* Timestamp.timestamp() */
+PyDoc_STRVAR(Timestamp_timestamp_doc,
+"timestamp() -> float");
+
+static PyObject *
+Timestamp_timestamp(Timestamp *self)
+{
+    double seconds = (double)self->seconds;
+
+    return PyFloat_FromDouble(
+        seconds + copysign((self->nanoseconds / _MSGPACK_NS_MAX), seconds));
+}
+
+
+/* TimestampType.tp_methods */
+static PyMethodDef Timestamp_tp_methods[] = {
+    {"fromtimestamp", (PyCFunction)Timestamp_fromtimestamp,
+     METH_O | METH_CLASS, Timestamp_fromtimestamp_doc},
+    {"timestamp", (PyCFunction)Timestamp_timestamp,
+     METH_NOARGS, Timestamp_timestamp_doc},
+    {NULL}  /* Sentinel */
+};
+
+
+/* Timestamp_Type.tp_members */
+static PyMemberDef Timestamp_tp_members[] = {
+    {"seconds", T_LONGLONG, offsetof(Timestamp, seconds), READONLY, NULL},
+    {"nanoseconds", T_UINT, offsetof(Timestamp, nanoseconds), READONLY, NULL},
+    {NULL}  /* Sentinel */
+};
+
+
+/* Timestamp_Type.tp_new */
+static PyObject *
+Timestamp_tp_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+{
+    static char *kwlist[] = {"seconds", "nanoseconds", NULL};
+    int64_t seconds;
+    uint32_t nanoseconds = 0;
+
+    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "L|I:__new__", kwlist,
+                                     &seconds, &nanoseconds)) {
+        return NULL;
+    }
+    return _Timestamp_New(type, seconds, nanoseconds);
+}
+
+
+/* Timestamp_Type */
+static PyTypeObject Timestamp_Type = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    "mood.msgpack.Timestamp",                 /*tp_name*/
+    sizeof(Timestamp),                        /*tp_basicsize*/
+    0,                                        /*tp_itemsize*/
+    (destructor)Timestamp_tp_dealloc,         /*tp_dealloc*/
+    0,                                        /*tp_print*/
+    0,                                        /*tp_getattr*/
+    0,                                        /*tp_setattr*/
+    0,                                        /*tp_compare*/
+    (reprfunc)Timestamp_tp_repr,              /*tp_repr*/
+    0,                                        /*tp_as_number*/
+    0,                                        /*tp_as_sequence*/
+    0,                                        /*tp_as_mapping*/
+    0,                                        /*tp_hash */
+    0,                                        /*tp_call*/
+    0,                                        /*tp_str*/
+    0,                                        /*tp_getattro*/
+    0,                                        /*tp_setattro*/
+    0,                                        /*tp_as_buffer*/
+    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE, /*tp_flags*/
+    Timestamp_tp_doc,                         /*tp_doc*/
+    0,                                        /*tp_traverse*/
+    0,                                        /*tp_clear*/
+    0,                                        /*tp_richcompare*/
+    0,                                        /*tp_weaklistoffset*/
+    0,                                        /*tp_iter*/
+    0,                                        /*tp_iternext*/
+    Timestamp_tp_methods,                     /*tp_methods*/
+    Timestamp_tp_members,                     /*tp_members*/
+    0,                                        /*tp_getsets*/
+    0,                                        /*tp_base*/
+    0,                                        /*tp_dict*/
+    0,                                        /*tp_descr_get*/
+    0,                                        /*tp_descr_set*/
+    0,                                        /*tp_dictoffset*/
+    0,                                        /*tp_init*/
+    0,                                        /*tp_alloc*/
+    Timestamp_tp_new,                         /*tp_new*/
+};
 
 
 /* ----------------------------------------------------------------------------
@@ -408,25 +620,55 @@ __pack_ext_type(PyObject *obj, Py_ssize_t len)
     __pack__((m), (s), (const char *)(b))
 
 
-static int
-__pack_type(PyObject *msg, uint8_t type)
+int
+__pack_raw8(PyObject *msg, uint8_t value)
 {
-    return __pack(msg, 1, &type);
+    return __pack(msg, 1, &value);
 }
+
+
+int
+__pack_raw16(PyObject *msg, uint16_t value)
+{
+    uint16_t bevalue = htobe16(value);
+
+    return __pack(msg, 2, &bevalue);
+}
+
+
+int
+__pack_raw32(PyObject *msg, uint32_t value)
+{
+    uint32_t bevalue = htobe32(value);
+
+    return __pack(msg, 4, &bevalue);
+}
+
+
+int
+__pack_raw64(PyObject *msg, uint64_t value)
+{
+    uint64_t bevalue = htobe64(value);
+
+    return __pack(msg, 8, &bevalue);
+}
+
+
+#define __pack_type __pack_raw8
 
 
 #define __pack_value(m, t, s, b) \
     (__pack_type((m), (t)) ? -1 : __pack((m), (s), (b)))
 
 
-static int
+int
 __pack_8(PyObject *msg, uint8_t type, uint8_t value)
 {
     return __pack_value(msg, type, 1, &value);
 }
 
 
-static int
+int
 __pack_16(PyObject *msg, uint8_t type, uint16_t value)
 {
     uint16_t bevalue = htobe16(value);
@@ -435,7 +677,7 @@ __pack_16(PyObject *msg, uint8_t type, uint16_t value)
 }
 
 
-static int
+int
 __pack_32(PyObject *msg, uint8_t type, uint32_t value)
 {
     uint32_t bevalue = htobe32(value);
@@ -444,7 +686,7 @@ __pack_32(PyObject *msg, uint8_t type, uint32_t value)
 }
 
 
-static int
+int
 __pack_64(PyObject *msg, uint8_t type, uint64_t value)
 {
     uint64_t bevalue = htobe64(value);
@@ -453,16 +695,16 @@ __pack_64(PyObject *msg, uint8_t type, uint64_t value)
 }
 
 
-/*static int
+int
 __pack_float(PyObject *msg, float value)
 {
     float_value fval = { .f = value };
 
     return __pack_32(msg, _MSGPACK_FLOAT32, fval.u32);
-}*/
+}
 
 
-static int
+int
 __pack_double(PyObject *msg, double value)
 {
     double_value dval = { .d = value };
@@ -482,7 +724,7 @@ __pack_double(PyObject *msg, double value)
 /* wrappers ----------------------------------------------------------------- */
 
 static int
-__pack_negative__(PyObject *msg, int64_t value)
+__pack_signed__(PyObject *msg, int64_t value)
 {
     if (value < _MSGPACK_INT16_MIN) {
         if (value < _MSGPACK_INT32_MIN) {
@@ -504,7 +746,7 @@ __pack_negative__(PyObject *msg, int64_t value)
 
 
 static int
-__pack_positive__(PyObject *msg, int64_t value)
+__pack_unsigned__(PyObject *msg, int64_t value)
 {
     if (value < _MSGPACK_UINT16_MAX) {
         if (value < _MSGPACK_UINT8_MAX) {
@@ -529,13 +771,13 @@ static int
 __pack_long__(PyObject *msg, int64_t value)
 {
     if (value < _MSGPACK_FIXINT_MIN) {
-        return __pack_negative__(msg, value);
+        return __pack_signed__(msg, value);
     }
     else if (value < _MSGPACK_FIXINT_MAX) { // fixint
-        return __pack_type(msg, (uint8_t)value);
+        return __pack_raw8(msg, (uint8_t)value);
     }
     else {
-        return __pack_positive__(msg, value);
+        return __pack_unsigned__(msg, value);
     }
 }
 
@@ -665,15 +907,15 @@ _pack_sequence(PyObject *msg, PyObject *obj, PyObject **items)
 /* types -------------------------------------------------------------------- */
 
 #define PyNone_Pack(msg) \
-    __pack_type((msg), _MSGPACK_NIL)
+    __pack_raw8((msg), _MSGPACK_NIL)
 
 
 #define PyFalse_Pack(msg) \
-    __pack_type((msg), _MSGPACK_FALSE)
+    __pack_raw8((msg), _MSGPACK_FALSE)
 
 
 #define PyTrue_Pack(msg) \
-    __pack_type((msg), _MSGPACK_TRUE)
+    __pack_raw8((msg), _MSGPACK_TRUE)
 
 
 static int
@@ -765,6 +1007,22 @@ _pack_ext(PyObject *msg, uint8_t _type, PyObject *data)
 
 
 static int
+_pack_timestamp(PyObject *msg, uint64_t seconds, uint32_t nanoseconds)
+{
+    uint64_t value = 0;
+
+    if ((seconds >> 34) == 0) {
+        value = (((uint64_t)nanoseconds << 34) | seconds);
+        if ((value & 0xffffffff00000000L) == 0) {
+            return __pack_raw32(msg, (uint32_t)value);
+        }
+        return __pack_raw64(msg, value);
+    }
+    return (__pack_raw32(msg, nanoseconds) || __pack_raw64(msg, seconds)); //XXX
+}
+
+
+static int
 _pack_set(PyObject *msg, PyObject *obj, uint8_t _type)
 {
     uint8_t type = _MSGPACK_INVALID;
@@ -784,6 +1042,23 @@ _pack_set(PyObject *msg, PyObject *obj, uint8_t _type)
 
 
 /* extensions --------------------------------------------------------------- */
+
+static int
+Timestamp_Pack(PyObject *msg, PyObject *obj)
+{
+    Timestamp *ts = (Timestamp *)obj;
+    PyObject *data = NULL;
+    int res = -1;
+
+    if ((data = PyByteArray_FromStringAndSize(NULL, 0))) {
+        if (!_pack_timestamp(data, (uint64_t)ts->seconds, ts->nanoseconds)) {
+            res = _pack_ext(msg, _MSGPACK_EXT_TIMESTAMP, data);
+        }
+        Py_DECREF(data);
+    }
+    return res;
+}
+
 
 static int
 PyComplex_Pack(PyObject *msg, PyObject *obj)
@@ -888,7 +1163,8 @@ _pack_obj(PyObject *msg, PyObject *obj)
 {
     PyTypeObject *type = Py_TYPE(obj);
 
-    // std types
+    /* std types -------------------------------------------------------------*/
+
     if (obj == Py_None) {
         return PyNone_Pack(msg);
     }
@@ -916,7 +1192,15 @@ _pack_obj(PyObject *msg, PyObject *obj)
     if (type == &PyDict_Type) {
         return PyDict_Pack(msg, obj);
     }
-    // extension types
+
+    /* extension types -------------------------------------------------------*/
+
+    // msgpack
+    if (type == &Timestamp_Type) {
+        return Timestamp_Pack(msg, obj);
+    }
+
+    // python
     if (type == &PyComplex_Type) {
         return PyComplex_Pack(msg, obj);
     }
@@ -1314,6 +1598,39 @@ PySet_FromBufferAndSize(Py_buffer *msg, Py_ssize_t len, Py_ssize_t *off, int fro
 
 
 /* extensions --------------------------------------------------------------- */
+
+/* _MSGPACK_EXT_TIMESTAMP */
+static PyObject *
+Timestamp_FromBufferAndSize(Py_buffer *msg, Py_ssize_t size, Py_ssize_t *off)
+{
+    PyObject *result = NULL;
+    const char *buf = NULL;
+    uint32_t nanoseconds = 0;
+    int64_t seconds = 0;
+    uint64_t value = 0;
+
+    if ((buf = __unpack_buf(msg, size, off))) {
+        if (size == 4) {
+            seconds = (int64_t)__unpack_32(buf);
+        }
+        else if (size == 8) {
+            value = __unpack_64(buf);
+            nanoseconds = (uint32_t)(value >> 34);
+            seconds = (int64_t)(value & 0x00000003ffffffffLL);
+        }
+        else if (size == 12) {
+            nanoseconds = __unpack_32(buf);
+            seconds = (int64_t)__unpack_64(buf + 4);
+        }
+        else {
+            return PyErr_Format(PyExc_TypeError,
+                                "cannot unpack, invalid timestamp size: %zd", size);
+        }
+        result = _Timestamp_New(&Timestamp_Type, seconds, nanoseconds);
+    }
+    return result;
+}
+
 
 /* _MSGPACK_PYEXT_COMPLEX */
 static double
@@ -1713,16 +2030,6 @@ PyInstance_FromBufferAndSize(Py_buffer *msg, Py_ssize_t size, Py_ssize_t *off)
 }
 
 
-/* _MSGPACK_EXT_TIMESTAMP */
-static PyObject *
-Timestamp_FromBufferAndSize(Py_buffer *msg, Py_ssize_t size, Py_ssize_t *off)
-{
-    PyErr_SetString(PyExc_NotImplementedError,
-                    "MessagePack timestamps are not implemented");
-    return NULL;
-}
-
-
 static PyObject *
 PyExtension_FromBufferAndSize(Py_buffer *msg, Py_ssize_t size, Py_ssize_t *off)
 {
@@ -1732,6 +2039,8 @@ PyExtension_FromBufferAndSize(Py_buffer *msg, Py_ssize_t size, Py_ssize_t *off)
         return NULL;
     }
     switch (type) {
+        case _MSGPACK_EXT_TIMESTAMP:
+            return Timestamp_FromBufferAndSize(msg, size, off);
         case _MSGPACK_PYEXT_COMPLEX:
             return PyComplex_FromBuffer(msg, off);
         case _MSGPACK_PYEXT_BYTEARRAY:
@@ -1748,8 +2057,6 @@ PyExtension_FromBufferAndSize(Py_buffer *msg, Py_ssize_t size, Py_ssize_t *off)
             return PySingleton_FromBufferAndSize(msg, size, off);
         case _MSGPACK_PYEXT_INSTANCE:
             return PyInstance_FromBufferAndSize(msg, size, off);
-        case _MSGPACK_EXT_TIMESTAMP:
-            return Timestamp_FromBufferAndSize(msg, size, off);
         default:
             return PyErr_Format(PyExc_TypeError,
                                 "cannot unpack, unknown extension type: '0x%02x'",
@@ -2216,6 +2523,7 @@ PyInit_msgpack(void)
              (module = PyModule_Create(&msgpack_def)) &&
              (
               _init_state(module) ||
+              _PyModule_AddType(module, "Timestamp", &Timestamp_Type) ||
               _PyModule_AddUnsignedIntConstant(module, "IPC8", _MSGPACK_UINT8) ||
               _PyModule_AddUnsignedIntConstant(module, "IPC16", _MSGPACK_UINT16) ||
               _PyModule_AddUnsignedIntConstant(module, "IPC32", _MSGPACK_UINT32) ||
