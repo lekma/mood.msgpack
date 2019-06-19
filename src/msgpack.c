@@ -621,14 +621,14 @@ __pack_ext_type(PyObject *obj, Py_ssize_t len)
 
 
 int
-__pack_raw8(PyObject *msg, uint8_t value)
+__pack_u8(PyObject *msg, uint8_t value)
 {
     return __pack(msg, 1, &value);
 }
 
 
 int
-__pack_raw16(PyObject *msg, uint16_t value)
+__pack_u16(PyObject *msg, uint16_t value)
 {
     uint16_t bevalue = htobe16(value);
 
@@ -637,7 +637,7 @@ __pack_raw16(PyObject *msg, uint16_t value)
 
 
 int
-__pack_raw32(PyObject *msg, uint32_t value)
+__pack_u32(PyObject *msg, uint32_t value)
 {
     uint32_t bevalue = htobe32(value);
 
@@ -646,7 +646,7 @@ __pack_raw32(PyObject *msg, uint32_t value)
 
 
 int
-__pack_raw64(PyObject *msg, uint64_t value)
+__pack_u64(PyObject *msg, uint64_t value)
 {
     uint64_t bevalue = htobe64(value);
 
@@ -654,45 +654,19 @@ __pack_raw64(PyObject *msg, uint64_t value)
 }
 
 
-#define __pack_type __pack_raw8
+#define __pack_type __pack_u8
 
 
-#define __pack_value(m, t, s, b) \
-    (__pack_type((m), (t)) ? -1 : __pack((m), (s), (b)))
+#define __pack_value(s, m, t, v) \
+    (__pack_type((m), (t)) ? -1 : __pack_u##s((m), (v)))
 
+#define __pack_8(m, t, v) __pack_value(8, (m), (t), (v))
 
-int
-__pack_8(PyObject *msg, uint8_t type, uint8_t value)
-{
-    return __pack_value(msg, type, 1, &value);
-}
+#define __pack_16(m, t, v) __pack_value(16, (m), (t), (v))
 
+#define __pack_32(m, t, v) __pack_value(32, (m), (t), (v))
 
-int
-__pack_16(PyObject *msg, uint8_t type, uint16_t value)
-{
-    uint16_t bevalue = htobe16(value);
-
-    return __pack_value(msg, type, 2, &bevalue);
-}
-
-
-int
-__pack_32(PyObject *msg, uint8_t type, uint32_t value)
-{
-    uint32_t bevalue = htobe32(value);
-
-    return __pack_value(msg, type, 4, &bevalue);
-}
-
-
-int
-__pack_64(PyObject *msg, uint8_t type, uint64_t value)
-{
-    uint64_t bevalue = htobe64(value);
-
-    return __pack_value(msg, type, 8, &bevalue);
-}
+#define __pack_64(m, t, v) __pack_value(64, (m), (t), (v))
 
 
 int
@@ -774,7 +748,7 @@ __pack_long__(PyObject *msg, int64_t value)
         return __pack_signed__(msg, value);
     }
     else if (value < _MSGPACK_FIXINT_MAX) { // fixint
-        return __pack_raw8(msg, (uint8_t)value);
+        return __pack_u8(msg, (uint8_t)value);
     }
     else {
         return __pack_unsigned__(msg, value);
@@ -907,15 +881,15 @@ _pack_sequence(PyObject *msg, PyObject *obj, PyObject **items)
 /* types -------------------------------------------------------------------- */
 
 #define PyNone_Pack(msg) \
-    __pack_raw8((msg), _MSGPACK_NIL)
+    __pack_type((msg), _MSGPACK_NIL)
 
 
 #define PyFalse_Pack(msg) \
-    __pack_raw8((msg), _MSGPACK_FALSE)
+    __pack_type((msg), _MSGPACK_FALSE)
 
 
 #define PyTrue_Pack(msg) \
-    __pack_raw8((msg), _MSGPACK_TRUE)
+    __pack_type((msg), _MSGPACK_TRUE)
 
 
 static int
@@ -1014,11 +988,11 @@ _pack_timestamp(PyObject *msg, uint64_t seconds, uint32_t nanoseconds)
     if ((seconds >> 34) == 0) {
         value = (((uint64_t)nanoseconds << 34) | seconds);
         if ((value & 0xffffffff00000000L) == 0) {
-            return __pack_raw32(msg, (uint32_t)value);
+            return __pack_u32(msg, (uint32_t)value);
         }
-        return __pack_raw64(msg, value);
+        return __pack_u64(msg, value);
     }
-    return (__pack_raw32(msg, nanoseconds) || __pack_raw64(msg, seconds)); //XXX
+    return (__pack_u32(msg, nanoseconds) || __pack_u64(msg, seconds)); //XXX
 }
 
 
@@ -1242,19 +1216,19 @@ _pack(PyObject *obj)
 
 #define __unpack_value__(s, b) be##s##toh((*(uint##s##_t *)(b)))
 
-#define __unpack_8(b) (*(uint8_t *)(b))
+#define __unpack_u8(b) (*(uint8_t *)(b))
 
-#define __unpack_16(b) __unpack_value__(16, (b))
+#define __unpack_u16(b) __unpack_value__(16, (b))
 
-#define __unpack_32(b) __unpack_value__(32, (b))
+#define __unpack_u32(b) __unpack_value__(32, (b))
 
-#define __unpack_64(b) __unpack_value__(64, (b))
+#define __unpack_u64(b) __unpack_value__(64, (b))
 
 
 static double
 __unpack_float(const char *buf)
 {
-    float_value fval = { .u32 = __unpack_32(buf) };
+    float_value fval = { .u32 = __unpack_u32(buf) };
 
     return fval.f;
 }
@@ -1263,7 +1237,7 @@ __unpack_float(const char *buf)
 static double
 __unpack_double(const char *buf)
 {
-    double_value dval = { .u64 = __unpack_64(buf) };
+    double_value dval = { .u64 = __unpack_u64(buf) };
 
     return dval.d;
 }
@@ -1287,13 +1261,13 @@ static Py_ssize_t
 __unpack_len(const char *buf, Py_ssize_t size)
 {
     if (size == 1) {
-        return __unpack_8(buf);
+        return __unpack_u8(buf);
     }
     if (size == 2) {
-        return __unpack_16(buf);
+        return __unpack_u16(buf);
     }
     if (size == 4) {
-        return __unpack_32(buf);
+        return __unpack_u32(buf);
     }
     PyErr_BadInternalCall();
     return -1;
@@ -1411,16 +1385,16 @@ static PyObject *
 _PyLong_FromSigned(const char *buf, Py_ssize_t size)
 {
     if (size == 1) {
-        return PyLong_FromLong((int8_t)__unpack_8(buf));
+        return PyLong_FromLong((int8_t)__unpack_u8(buf));
     }
     if (size == 2) {
-        return PyLong_FromLong((int16_t)__unpack_16(buf));
+        return PyLong_FromLong((int16_t)__unpack_u16(buf));
     }
     if (size == 4) {
-        return PyLong_FromLong((int32_t)__unpack_32(buf));
+        return PyLong_FromLong((int32_t)__unpack_u32(buf));
     }
     if (size == 8) {
-        return PyLong_FromLongLong((int64_t)__unpack_64(buf));
+        return PyLong_FromLongLong((int64_t)__unpack_u64(buf));
     }
     PyErr_BadInternalCall();
     return NULL;
@@ -1430,16 +1404,16 @@ static PyObject *
 _PyLong_FromUnsigned(const char *buf, Py_ssize_t size)
 {
     if (size == 1) {
-        return PyLong_FromUnsignedLong(__unpack_8(buf));
+        return PyLong_FromUnsignedLong(__unpack_u8(buf));
     }
     if (size == 2) {
-        return PyLong_FromUnsignedLong(__unpack_16(buf));
+        return PyLong_FromUnsignedLong(__unpack_u16(buf));
     }
     if (size == 4) {
-        return PyLong_FromUnsignedLong(__unpack_32(buf));
+        return PyLong_FromUnsignedLong(__unpack_u32(buf));
     }
     if (size == 8) {
-        return PyLong_FromUnsignedLongLong(__unpack_64(buf));
+        return PyLong_FromUnsignedLongLong(__unpack_u64(buf));
     }
     PyErr_BadInternalCall();
     return NULL;
@@ -1611,16 +1585,16 @@ Timestamp_FromBufferAndSize(Py_buffer *msg, Py_ssize_t size, Py_ssize_t *off)
 
     if ((buf = __unpack_buf(msg, size, off))) {
         if (size == 4) {
-            seconds = (int64_t)__unpack_32(buf);
+            seconds = (int64_t)__unpack_u32(buf);
         }
         else if (size == 8) {
-            value = __unpack_64(buf);
+            value = __unpack_u64(buf);
             nanoseconds = (uint32_t)(value >> 34);
             seconds = (int64_t)(value & 0x00000003ffffffffLL);
         }
         else if (size == 12) {
-            nanoseconds = __unpack_32(buf);
-            seconds = (int64_t)__unpack_64(buf + 4);
+            nanoseconds = __unpack_u32(buf);
+            seconds = (int64_t)__unpack_u64(buf + 4);
         }
         else {
             return PyErr_Format(PyExc_TypeError,
