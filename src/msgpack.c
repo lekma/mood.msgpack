@@ -620,42 +620,38 @@ __pack_ext_type(PyObject *obj, Py_ssize_t len)
     __pack__((m), (s), (const char *)(b))
 
 
-int
+#define __pack_value__(s, m, v) \
+    do { \
+        uint##s##_t bev = htobe##s((v)); \
+        return __pack((m), ((s) >> 3), &bev); \
+    } while (0)
+
+static inline int
 __pack_u8(PyObject *msg, uint8_t value)
 {
     return __pack(msg, 1, &value);
 }
 
-
-int
+static inline int
 __pack_u16(PyObject *msg, uint16_t value)
 {
-    uint16_t bevalue = htobe16(value);
-
-    return __pack(msg, 2, &bevalue);
+    __pack_value__(16, msg, value);
 }
 
-
-int
+static inline int
 __pack_u32(PyObject *msg, uint32_t value)
 {
-    uint32_t bevalue = htobe32(value);
-
-    return __pack(msg, 4, &bevalue);
+    __pack_value__(32, msg, value);
 }
 
-
-int
+static inline int
 __pack_u64(PyObject *msg, uint64_t value)
 {
-    uint64_t bevalue = htobe64(value);
-
-    return __pack(msg, 8, &bevalue);
+    __pack_value__(64, msg, value);
 }
 
 
 #define __pack_type __pack_u8
-
 
 #define __pack_value(s, m, t, v) \
     (__pack_type((m), (t)) ? -1 : __pack_u##s((m), (v)))
@@ -668,8 +664,7 @@ __pack_u64(PyObject *msg, uint64_t value)
 
 #define __pack_64(m, t, v) __pack_value(64, (m), (t), (v))
 
-
-int
+static inline int
 __pack_float(PyObject *msg, float value)
 {
     float_value fval = { .f = value };
@@ -677,8 +672,7 @@ __pack_float(PyObject *msg, float value)
     return __pack_32(msg, _MSGPACK_FLOAT32, fval.u32);
 }
 
-
-int
+static inline int
 __pack_double(PyObject *msg, double value)
 {
     double_value dval = { .d = value };
@@ -1224,8 +1218,7 @@ _pack(PyObject *obj)
 
 #define __unpack_u64(b) __unpack_value__(64, (b))
 
-
-static double
+static inline double
 __unpack_float(const char *buf)
 {
     float_value fval = { .u32 = __unpack_u32(buf) };
@@ -1233,8 +1226,7 @@ __unpack_float(const char *buf)
     return fval.f;
 }
 
-
-static double
+static inline double
 __unpack_double(const char *buf)
 {
     double_value dval = { .u64 = __unpack_u64(buf) };
@@ -1255,23 +1247,6 @@ __unpack_double__(const char *buf, Py_ssize_t size)
     PyErr_BadInternalCall();
     return -1.0;
 }*/
-
-
-static Py_ssize_t
-__unpack_len(const char *buf, Py_ssize_t size)
-{
-    if (size == 1) {
-        return __unpack_u8(buf);
-    }
-    if (size == 2) {
-        return __unpack_u16(buf);
-    }
-    if (size == 4) {
-        return __unpack_u32(buf);
-    }
-    PyErr_BadInternalCall();
-    return -1;
-}
 
 
 /* -------------------------------------------------------------------------- */
@@ -1320,6 +1295,23 @@ __unpack_buf(Py_buffer *msg, Py_ssize_t size, Py_ssize_t *off)
 
 
 /* -------------------------------------------------------------------------- */
+
+static Py_ssize_t
+__unpack_len(const char *buf, Py_ssize_t size)
+{
+    if (size == 1) {
+        return __unpack_u8(buf);
+    }
+    if (size == 2) {
+        return __unpack_u16(buf);
+    }
+    if (size == 4) {
+        return __unpack_u32(buf);
+    }
+    PyErr_BadInternalCall();
+    return -1;
+}
+
 
 static Py_ssize_t
 _unpack_len(Py_buffer *msg, Py_ssize_t size, Py_ssize_t *off)
