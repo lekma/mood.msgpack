@@ -523,7 +523,8 @@ __pack_bin_type(PyObject *obj, Py_ssize_t len)
     if (len < _MSGPACK_UINT32_MAX) {
         return _MSGPACK_BIN32;
     }
-    return _PyErr_TooLong(obj), _MSGPACK_INVALID;
+    _PyErr_TooLong(obj);
+    return _MSGPACK_INVALID;
 }
 
 
@@ -542,7 +543,8 @@ __pack_str_type(PyObject *obj, Py_ssize_t len)
     if (len < _MSGPACK_UINT32_MAX) {
         return _MSGPACK_STR32;
     }
-    return _PyErr_TooLong(obj), _MSGPACK_INVALID;
+    _PyErr_TooLong(obj);
+    return _MSGPACK_INVALID;
 }
 
 
@@ -558,7 +560,8 @@ __pack_array_type(PyObject *obj, Py_ssize_t len)
     if (len < _MSGPACK_UINT32_MAX) {
         return _MSGPACK_ARRAY32;
     }
-    return _PyErr_TooLong(obj), _MSGPACK_INVALID;
+    _PyErr_TooLong(obj);
+    return _MSGPACK_INVALID;
 }
 
 
@@ -574,7 +577,8 @@ __pack_map_type(PyObject *obj, Py_ssize_t len)
     if (len < _MSGPACK_UINT32_MAX) {
         return _MSGPACK_MAP32;
     }
-    return _PyErr_TooLong(obj), _MSGPACK_INVALID;
+    _PyErr_TooLong(obj);
+    return _MSGPACK_INVALID;
 }
 
 
@@ -606,7 +610,8 @@ __pack_ext_type(PyObject *obj, Py_ssize_t len)
     if (len < _MSGPACK_UINT32_MAX) {
         return _MSGPACK_EXT32;
     }
-    return _PyErr_TooLong(obj), _MSGPACK_INVALID;
+    _PyErr_TooLong(obj);
+    return _MSGPACK_INVALID;
 }
 
 
@@ -892,7 +897,7 @@ PyLong_Pack(PyObject *msg, PyObject *obj)
     int overflow = 0;
     int64_t value = PyLong_AsLongLongAndOverflow(obj, &overflow);
 
-    if (value == -1 && PyErr_Occurred()) {
+    if ((value == -1) && PyErr_Occurred()) {
         return -1;
     }
     if (overflow) {
@@ -901,7 +906,7 @@ PyLong_Pack(PyObject *msg, PyObject *obj)
             return -1;
         }
         uint64_t uvalue = PyLong_AsUnsignedLongLong(obj);
-        if (PyErr_Occurred()) {
+        if ((uvalue == (uint64_t)-1) && PyErr_Occurred()) {
             return -1;
         }
         return __pack_64(msg, _MSGPACK_UINT64, uvalue);
@@ -1839,16 +1844,16 @@ _PyObject_Extend(PyObject *self, PyObject *arg)
     _Py_IDENTIFIER(extend);
     PyObject *result = NULL;
 
-    if ((result = _PyObject_CallMethodIdObjArgs(self, &PyId_extend,
+    if (!(result = _PyObject_CallMethodIdObjArgs(self, &PyId_extend,
                                                 arg, NULL))) {
-        Py_DECREF(result);
-        return 0;
+        if (PyErr_ExceptionMatches(PyExc_AttributeError)) {
+            PyErr_Clear();
+            return _PySequence_InPlaceConcatOrAdd(self, arg);
+        }
+        return -1;
     }
-    if (PyErr_ExceptionMatches(PyExc_AttributeError)) {
-        PyErr_Clear();
-        return _PySequence_InPlaceConcatOrAdd(self, arg);
-    }
-    return -1;
+    Py_DECREF(result);
+    return 0;
 }
 
 
@@ -1918,16 +1923,16 @@ _PyObject_Update(PyObject *self, PyObject *arg)
     _Py_IDENTIFIER(update);
     PyObject *result = NULL;
 
-    if ((result = _PyObject_CallMethodIdObjArgs(self, &PyId_update,
+    if (!(result = _PyObject_CallMethodIdObjArgs(self, &PyId_update,
                                                 arg, NULL))) {
-        Py_DECREF(result);
-        return 0;
+        if (PyErr_ExceptionMatches(PyExc_AttributeError)) {
+            PyErr_Clear();
+            return _PyObject_Merge(self, arg);
+        }
+        return -1;
     }
-    if (PyErr_ExceptionMatches(PyExc_AttributeError)) {
-        PyErr_Clear();
-        return _PyObject_Merge(self, arg);
-    }
-    return -1;
+    Py_DECREF(result);
+    return 0;
 }
 
 
@@ -2148,7 +2153,8 @@ __pack_ipc_type(PyObject *obj, Py_ssize_t len)
     if (len < _MSGPACK_UINT32_MAX) {
         return _MSGPACK_UINT32;
     }
-    return _PyErr_TooLong(obj), _MSGPACK_INVALID;
+    _PyErr_TooLong(obj);
+    return _MSGPACK_INVALID;
 }
 
 
@@ -2332,16 +2338,13 @@ msgpack_ipc_size(PyObject *module, PyObject *args)
     if (!PyArg_ParseTuple(args, "b:ipc_size", &type)) {
         return NULL;
     }
-    switch (type) {
-        case _MSGPACK_UINT8:
-        case _MSGPACK_UINT16:
-        case _MSGPACK_UINT32:
-            break;
-        default:
-            return PyErr_Format(PyExc_TypeError,
-                                "invalid ipc type: '0x%02x'", type);
+    if ((type == _MSGPACK_UINT8) ||
+        (type == _MSGPACK_UINT16) ||
+        (type == _MSGPACK_UINT32)){
+        return PyLong_FromSsize_t(_type_size(type) + 1);
     }
-    return PyLong_FromSsize_t(_type_size(type) + 1);
+    return PyErr_Format(PyExc_TypeError,
+                        "invalid ipc type: '0x%02x'", type);
 }
 
 
