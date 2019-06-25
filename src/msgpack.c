@@ -1742,41 +1742,22 @@ Timestamp_FromBufferAndSize(Py_buffer *msg, Py_ssize_t size, Py_ssize_t *off)
 
 /* _MSGPACK_PYEXT_COMPLEX */
 static double
-__double_from_buffer(Py_buffer *msg, Py_ssize_t size, Py_ssize_t *off)
-{
-    const char *buf = NULL;
-    double result = -1.0;
-
-    if ((buf = __unpack_buf(msg, size, off))) {
-        if (size == 4) {
-            result = __unpack_float(buf);
-        }
-        else if (size == 8) {
-            result = __unpack_double(buf);
-        }
-        else {
-            PyErr_BadInternalCall();
-        }
-    }
-    return result;
-}
-
-static double
 _unpack_complex_member(Py_buffer *msg, Py_ssize_t *off)
 {
     uint8_t type = _MSGPACK_INVALID;
+    const char *buf = NULL;
     double result = -1.0;
 
     if ((type = __unpack_type(msg, off)) != _MSGPACK_INVALID) {
-        if (type == _MSGPACK_FLOAT32) {
-            result = __double_from_buffer(msg, 4, off);
-        }
-        else if (type == _MSGPACK_FLOAT64) {
-            result = __double_from_buffer(msg, 8, off);
+        if (type == _MSGPACK_FLOAT64) {
+            if ((buf = __unpack_buf(msg, 8, off))) {
+                result = __unpack_double(buf);
+            }
         }
         else {
             PyErr_Format(PyExc_TypeError,
-                         "cannot unpack, invalid float type: '0x%02x'", type);
+                         "cannot unpack, invalid complex member type: '0x%02x'",
+                         type);
         }
     }
     return result;
