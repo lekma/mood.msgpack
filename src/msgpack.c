@@ -608,23 +608,25 @@ __pack_ext_type(PyObject *obj, Py_ssize_t len)
     uint8_t type = _MSGPACK_INVALID;
 
     if (len < _MSGPACK_UINT8_MAX) {
-        if (len == 1) {
-            type = _MSGPACK_FIXEXT1;
-        }
-        else if (len == 2) {
-            type = _MSGPACK_FIXEXT2;
-        }
-        else if (len == 4) {
-            type = _MSGPACK_FIXEXT4;
-        }
-        else if (len == 8) {
-            type = _MSGPACK_FIXEXT8;
-        }
-        else if (len == 16) {
-            type = _MSGPACK_FIXEXT16;
-        }
-        else {
-            type = _MSGPACK_EXT8;
+        switch (len) {
+            case 1:
+                type = _MSGPACK_FIXEXT1;
+                break;
+            case 2:
+                type = _MSGPACK_FIXEXT2;
+                break;
+            case 4:
+                type = _MSGPACK_FIXEXT4;
+                break;
+            case 8:
+                type = _MSGPACK_FIXEXT8;
+                break;
+            case 16:
+                type = _MSGPACK_FIXEXT16;
+                break;
+            default:
+                type = _MSGPACK_EXT8;
+                break;
         }
     }
     else if (len < _MSGPACK_UINT16_MAX) {
@@ -723,49 +725,69 @@ __pack_double(PyObject *msg, double value)
 
 /* wrappers ----------------------------------------------------------------- */
 
+static inline int
+__pack_signed__(PyObject *msg, int64_t value)
+{
+    int res = -1;
+
+    if (value < _MSGPACK_INT16_MIN) {
+        if (value < _MSGPACK_INT32_MIN) {
+            res = __pack_64(msg, _MSGPACK_INT64, (uint64_t)value);
+        }
+        else {
+            res = __pack_32(msg, _MSGPACK_INT32, (uint32_t)value);
+        }
+    }
+    else {
+        if (value < _MSGPACK_INT8_MIN) {
+            res = __pack_16(msg, _MSGPACK_INT16, (uint16_t)value);
+        }
+        else {
+            res = __pack_8(msg, _MSGPACK_INT8, (uint8_t)value);
+        }
+    }
+    return res;
+}
+
+
+static inline int
+__pack_unsigned__(PyObject *msg, int64_t value)
+{
+    int res = -1;
+
+    if (value < _MSGPACK_UINT16_MAX) {
+        if (value < _MSGPACK_UINT8_MAX) {
+            res = __pack_8(msg, _MSGPACK_UINT8, (uint8_t)value);
+        }
+        else {
+            res = __pack_16(msg, _MSGPACK_UINT16, (uint16_t)value);
+        }
+    }
+    else {
+        if (value < _MSGPACK_UINT32_MAX) {
+            res = __pack_32(msg, _MSGPACK_UINT32, (uint32_t)value);
+        }
+        else {
+            res = __pack_64(msg, _MSGPACK_UINT64, (uint64_t)value);
+        }
+    }
+    return res;
+}
+
+
 static int
 __pack_long__(PyObject *msg, int64_t value)
 {
     int res = -1;
 
     if (value < _MSGPACK_FIXINT_MIN) {
-        if (value < _MSGPACK_INT16_MIN) {
-            if (value < _MSGPACK_INT32_MIN) {
-                res = __pack_64(msg, _MSGPACK_INT64, (uint64_t)value);
-            }
-            else {
-                res = __pack_32(msg, _MSGPACK_INT32, (uint32_t)value);
-            }
-        }
-        else {
-            if (value < _MSGPACK_INT8_MIN) {
-                res = __pack_16(msg, _MSGPACK_INT16, (uint16_t)value);
-            }
-            else {
-                res = __pack_8(msg, _MSGPACK_INT8, (uint8_t)value);
-            }
-        }
+        res = __pack_signed__(msg, value);
     }
     else if (value < _MSGPACK_FIXINT_MAX) { // fixint
         res = __pack_u8(msg, (uint8_t)value);
     }
     else {
-        if (value < _MSGPACK_UINT16_MAX) {
-            if (value < _MSGPACK_UINT8_MAX) {
-                res = __pack_8(msg, _MSGPACK_UINT8, (uint8_t)value);
-            }
-            else {
-                res = __pack_16(msg, _MSGPACK_UINT16, (uint16_t)value);
-            }
-        }
-        else {
-            if (value < _MSGPACK_UINT32_MAX) {
-                res = __pack_32(msg, _MSGPACK_UINT32, (uint32_t)value);
-            }
-            else {
-                res = __pack_64(msg, _MSGPACK_UINT64, (uint64_t)value);
-            }
-        }
+        res = __pack_unsigned__(msg, value);
     }
     return res;
 }
@@ -794,20 +816,22 @@ __pack_len__(PyObject *msg, uint8_t type, Py_ssize_t len)
     Py_ssize_t size = _type_size(type);
     int res = -1;
 
-    if (size == 0) {
-        res = __pack_type(msg, type);
-    }
-    else if (size == 1) {
-        res = __pack_8(msg, type, (uint8_t)len);
-    }
-    else if (size == 2) {
-        res = __pack_16(msg, type, (uint16_t)len);
-    }
-    else if (size == 4) {
-        res = __pack_32(msg, type, (uint32_t)len);
-    }
-    else {
-        PyErr_BadInternalCall();
+    switch (size) {
+        case 0:
+            res = __pack_type(msg, type);
+            break;
+        case 1:
+            res = __pack_8(msg, type, (uint8_t)len);
+            break;
+        case 2:
+            res = __pack_16(msg, type, (uint16_t)len);
+            break;
+        case 4:
+            res = __pack_32(msg, type, (uint32_t)len);
+            break;
+        default:
+            PyErr_BadInternalCall();
+            break;
     }
     return res;
 }
@@ -1261,25 +1285,27 @@ __unpack_double(const char *buf)
 
 /* -------------------------------------------------------------------------- */
 
-/*static int64_t
+static int64_t
 __unpack_signed__(const char *buf, Py_ssize_t size)
 {
     int64_t value = -1;
 
-    if (size == 1) {
-        value = (int8_t)__unpack_u8(buf);
-    }
-    else if (size == 2) {
-        value = (int16_t)__unpack_u16(buf);
-    }
-    else if (size == 4) {
-        value = (int32_t)__unpack_u32(buf);
-    }
-    else if (size == 8) {
-        value = (int64_t)__unpack_u64(buf);
-    }
-    else {
-        PyErr_BadInternalCall();
+    switch (size) {
+        case 1:
+            value = (int8_t)__unpack_u8(buf);
+            break;
+        case 2:
+            value = (int16_t)__unpack_u16(buf);
+            break;
+        case 4:
+            value = (int32_t)__unpack_u32(buf);
+            break;
+        case 8:
+            value = (int64_t)__unpack_u64(buf);
+            break;
+        default:
+            PyErr_BadInternalCall();
+            break;
     }
     return value;
 }
@@ -1290,20 +1316,22 @@ __unpack_unsigned__(const char *buf, Py_ssize_t size)
 {
     uint64_t value = (uint64_t)-1;
 
-    if (size == 1) {
-        value = __unpack_u8(buf);
-    }
-    else if (size == 2) {
-        value = __unpack_u16(buf);
-    }
-    else if (size == 4) {
-        value = __unpack_u32(buf);
-    }
-    else if (size == 8) {
-        value = __unpack_u64(buf);
-    }
-    else {
-        PyErr_BadInternalCall();
+    switch (size) {
+        case 1:
+            value = __unpack_u8(buf);
+            break;
+        case 2:
+            value = __unpack_u16(buf);
+            break;
+        case 4:
+            value = __unpack_u32(buf);
+            break;
+        case 8:
+            value = __unpack_u64(buf);
+            break;
+        default:
+            PyErr_BadInternalCall();
+            break;
     }
     return value;
 }
@@ -1324,7 +1352,7 @@ __unpack_float__(const char *buf, Py_ssize_t size)
         PyErr_BadInternalCall();
     }
     return value;
-}*/
+}
 
 
 /* -------------------------------------------------------------------------- */
@@ -1379,17 +1407,19 @@ __unpack_len(const char *buf, Py_ssize_t size)
 {
     Py_ssize_t len = -1;
 
-    if (size == 1) {
-        len = __unpack_u8(buf);
-    }
-    else if (size == 2) {
-        len = __unpack_u16(buf);
-    }
-    else if (size == 4) {
-        len = __unpack_u32(buf);
-    }
-    else {
-        PyErr_BadInternalCall();
+    switch (size) {
+        case 1:
+            len = __unpack_u8(buf);
+            break;
+        case 2:
+            len = __unpack_u16(buf);
+            break;
+        case 4:
+            len = __unpack_u32(buf);
+            break;
+        default:
+            PyErr_BadInternalCall();
+            break;
     }
     return len;
 }
@@ -1458,81 +1488,23 @@ _unpack_registered(Py_buffer *msg, Py_ssize_t size, Py_ssize_t *off)
 static PyObject *
 _PyLong_FromSigned(const char *buf, Py_ssize_t size)
 {
-    int64_t value;
+    int64_t value = __unpack_signed__(buf, size);
 
-    if (size == 1) {
-        value = (int8_t)__unpack_u8(buf);
-    }
-    else if (size == 2) {
-        value = (int16_t)__unpack_u16(buf);
-    }
-    else if (size == 4) {
-        value = (int32_t)__unpack_u32(buf);
-    }
-    else if (size == 8) {
-        value = (int64_t)__unpack_u64(buf);
-    }
-    else {
-        PyErr_BadInternalCall();
+    if ((value == -1) && PyErr_Occurred()) {
         return NULL;
     }
     return PyLong_FromLongLong(value);
-
-
-    /*if (size == 1) {
-        return PyLong_FromLong((int8_t)__unpack_u8(buf));
-    }
-    if (size == 2) {
-        return PyLong_FromLong((int16_t)__unpack_u16(buf));
-    }
-    if (size == 4) {
-        return PyLong_FromLong((int32_t)__unpack_u32(buf));
-    }
-    if (size == 8) {
-        return PyLong_FromLongLong((int64_t)__unpack_u64(buf));
-    }
-    PyErr_BadInternalCall();
-    return NULL;*/
 }
 
 static PyObject *
 _PyLong_FromUnsigned(const char *buf, Py_ssize_t size)
 {
-    uint64_t value;
+    uint64_t value = __unpack_unsigned__(buf, size);
 
-    if (size == 1) {
-        value = __unpack_u8(buf);
-    }
-    else if (size == 2) {
-        value = __unpack_u16(buf);
-    }
-    else if (size == 4) {
-        value = __unpack_u32(buf);
-    }
-    else if (size == 8) {
-        value = __unpack_u64(buf);
-    }
-    else {
-        PyErr_BadInternalCall();
+    if ((value == (uint64_t)-1) && PyErr_Occurred()) {
         return NULL;
     }
     return PyLong_FromUnsignedLongLong(value);
-
-
-    /*if (size == 1) {
-        return PyLong_FromUnsignedLong(__unpack_u8(buf));
-    }
-    if (size == 2) {
-        return PyLong_FromUnsignedLong(__unpack_u16(buf));
-    }
-    if (size == 4) {
-        return PyLong_FromUnsignedLong(__unpack_u32(buf));
-    }
-    if (size == 8) {
-        return PyLong_FromUnsignedLongLong(__unpack_u64(buf));
-    }
-    PyErr_BadInternalCall();
-    return NULL;*/
 }
 
 #define PyLong_FromStringAndSize(b, s, is) \
@@ -1543,29 +1515,12 @@ _PyLong_FromUnsigned(const char *buf, Py_ssize_t size)
 static PyObject *
 PyFloat_FromStringAndSize(const char *buf, Py_ssize_t size)
 {
-    double value;
+    double value = __unpack_float__(buf, size);
 
-    if (size == 4) {
-        value = __unpack_float(buf);
-    }
-    else if (size == 8) {
-        value = __unpack_double(buf);
-    }
-    else {
-        PyErr_BadInternalCall();
+    if ((value == -1.0) && PyErr_Occurred()) {
         return NULL;
     }
     return PyFloat_FromDouble(value);
-
-
-    /*if (size == 4) {
-        return PyFloat_FromDouble(__unpack_float(buf));
-    }
-    if (size == 8) {
-        return PyFloat_FromDouble(__unpack_double(buf));
-    }
-    PyErr_BadInternalCall();
-    return NULL;*/
 }
 
 
