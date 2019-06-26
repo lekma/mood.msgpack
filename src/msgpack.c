@@ -410,13 +410,16 @@ enum {
 static Py_ssize_t
 _type_size(uint8_t type)
 {
+    Py_ssize_t size = 0;
+
     switch (type) {
         case _MSGPACK_BIN8:
         case _MSGPACK_EXT8:
         case _MSGPACK_UINT8:
         case _MSGPACK_INT8:
         case _MSGPACK_STR8:
-            return 1;
+            size = 1;
+            break;
         case _MSGPACK_BIN16:
         case _MSGPACK_EXT16:
         case _MSGPACK_UINT16:
@@ -424,7 +427,8 @@ _type_size(uint8_t type)
         case _MSGPACK_STR16:
         case _MSGPACK_ARRAY16:
         case _MSGPACK_MAP16:
-            return 2;
+            size = 2;
+            break;
         case _MSGPACK_BIN32:
         case _MSGPACK_EXT32:
         case _MSGPACK_FLOAT32:
@@ -433,14 +437,17 @@ _type_size(uint8_t type)
         case _MSGPACK_STR32:
         case _MSGPACK_ARRAY32:
         case _MSGPACK_MAP32:
-            return 4;
+            size = 4;
+            break;
         case _MSGPACK_FLOAT64:
         case _MSGPACK_UINT64:
         case _MSGPACK_INT64:
-            return 8;
+            size = 8;
+            break;
         default:
-            return 0;
+            break;
     }
+    return size;
 }
 
 
