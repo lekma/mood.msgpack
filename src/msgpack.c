@@ -1045,7 +1045,7 @@ _pack_timestamp(PyObject *msg, uint64_t seconds, uint32_t nanoseconds)
         }
         return __pack_u64(msg, value);
     }
-    return (__pack_u32(msg, nanoseconds) || __pack_u64(msg, seconds)); //XXX
+    return (__pack_u32(msg, nanoseconds) || __pack_u64(msg, seconds)) ? -1 : 0;
 }
 
 
@@ -1292,78 +1292,6 @@ __unpack_double(const char *buf)
 
 /* -------------------------------------------------------------------------- */
 
-static int64_t
-__unpack_signed__(const char *buf, Py_ssize_t size)
-{
-    int64_t value = -1;
-
-    switch (size) {
-        case 1:
-            value = (int8_t)__unpack_u8(buf);
-            break;
-        case 2:
-            value = (int16_t)__unpack_u16(buf);
-            break;
-        case 4:
-            value = (int32_t)__unpack_u32(buf);
-            break;
-        case 8:
-            value = (int64_t)__unpack_u64(buf);
-            break;
-        default:
-            PyErr_BadInternalCall();
-            break;
-    }
-    return value;
-}
-
-
-static uint64_t
-__unpack_unsigned__(const char *buf, Py_ssize_t size)
-{
-    uint64_t value = (uint64_t)-1;
-
-    switch (size) {
-        case 1:
-            value = __unpack_u8(buf);
-            break;
-        case 2:
-            value = __unpack_u16(buf);
-            break;
-        case 4:
-            value = __unpack_u32(buf);
-            break;
-        case 8:
-            value = __unpack_u64(buf);
-            break;
-        default:
-            PyErr_BadInternalCall();
-            break;
-    }
-    return value;
-}
-
-
-static double
-__unpack_float__(const char *buf, Py_ssize_t size)
-{
-    double value = -1.0;
-
-    if (size == 4) {
-        value = __unpack_float(buf);
-    }
-    else if (size == 8) {
-        value = __unpack_double(buf);
-    }
-    else {
-        PyErr_BadInternalCall();
-    }
-    return value;
-}
-
-
-/* -------------------------------------------------------------------------- */
-
 static Py_ssize_t
 __unpack_offset(Py_buffer *msg, Py_ssize_t size, Py_ssize_t *off)
 {
@@ -1495,10 +1423,24 @@ _unpack_registered(Py_buffer *msg, Py_ssize_t size, Py_ssize_t *off)
 static PyObject *
 _PyLong_FromSigned(const char *buf, Py_ssize_t size)
 {
-    int64_t value = __unpack_signed__(buf, size);
+    int64_t value;
 
-    if ((value == -1) && PyErr_Occurred()) {
-        return NULL;
+    switch (size) {
+        case 1:
+            value = (int8_t)__unpack_u8(buf);
+            break;
+        case 2:
+            value = (int16_t)__unpack_u16(buf);
+            break;
+        case 4:
+            value = (int32_t)__unpack_u32(buf);
+            break;
+        case 8:
+            value = (int64_t)__unpack_u64(buf);
+            break;
+        default:
+            PyErr_BadInternalCall();
+            return NULL;
     }
     return PyLong_FromLongLong(value);
 }
@@ -1506,10 +1448,24 @@ _PyLong_FromSigned(const char *buf, Py_ssize_t size)
 static PyObject *
 _PyLong_FromUnsigned(const char *buf, Py_ssize_t size)
 {
-    uint64_t value = __unpack_unsigned__(buf, size);
+    uint64_t value;
 
-    if ((value == (uint64_t)-1) && PyErr_Occurred()) {
-        return NULL;
+    switch (size) {
+        case 1:
+            value = __unpack_u8(buf);
+            break;
+        case 2:
+            value = __unpack_u16(buf);
+            break;
+        case 4:
+            value = __unpack_u32(buf);
+            break;
+        case 8:
+            value = __unpack_u64(buf);
+            break;
+        default:
+            PyErr_BadInternalCall();
+            return NULL;
     }
     return PyLong_FromUnsignedLongLong(value);
 }
@@ -1522,9 +1478,16 @@ _PyLong_FromUnsigned(const char *buf, Py_ssize_t size)
 static PyObject *
 PyFloat_FromStringAndSize(const char *buf, Py_ssize_t size)
 {
-    double value = __unpack_float__(buf, size);
+    double value;
 
-    if ((value == -1.0) && PyErr_Occurred()) {
+    if (size == 4) {
+        value = __unpack_float(buf);
+    }
+    else if (size == 8) {
+        value = __unpack_double(buf);
+    }
+    else {
+        PyErr_BadInternalCall();
         return NULL;
     }
     return PyFloat_FromDouble(value);
@@ -1692,9 +1655,8 @@ Timestamp_FromBufferAndSize(Py_buffer *msg, Py_ssize_t size, Py_ssize_t *off)
             seconds = (int64_t)__unpack_u64(buf + 4);
         }
         else {
-            return PyErr_Format(PyExc_TypeError,
-                                "cannot unpack, invalid timestamp size: %zd",
-                                size);
+            PyErr_BadInternalCall();
+            return NULL;
         }
         result = _Timestamp_New(&Timestamp_Type, seconds, nanoseconds);
     }
