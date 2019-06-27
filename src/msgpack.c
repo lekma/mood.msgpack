@@ -1655,8 +1655,9 @@ Timestamp_FromBufferAndSize(Py_buffer *msg, Py_ssize_t size, Py_ssize_t *off)
             seconds = (int64_t)__unpack_u64(buf + 4);
         }
         else {
-            PyErr_BadInternalCall();
-            return NULL;
+            return PyErr_Format(PyExc_ValueError,
+                                "cannot unpack, invalid timestamp size: %zd",
+                                size);
         }
         result = _Timestamp_New(&Timestamp_Type, seconds, nanoseconds);
     }
