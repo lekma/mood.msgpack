@@ -1338,36 +1338,26 @@ __unpack_buf(Py_buffer *msg, Py_ssize_t size, Py_ssize_t *off)
 /* -------------------------------------------------------------------------- */
 
 static Py_ssize_t
-__unpack_len(const char *buf, Py_ssize_t size)
-{
-    Py_ssize_t len = -1;
-
-    switch (size) {
-        case 1:
-            len = __unpack_u8(buf);
-            break;
-        case 2:
-            len = __unpack_u16(buf);
-            break;
-        case 4:
-            len = __unpack_u32(buf);
-            break;
-        default:
-            PyErr_BadInternalCall();
-            break;
-    }
-    return len;
-}
-
-
-static Py_ssize_t
 _unpack_len(Py_buffer *msg, Py_ssize_t size, Py_ssize_t *off)
 {
     const char *buf = NULL;
     Py_ssize_t len = -1;
 
     if ((buf = __unpack_buf(msg, size, off))) {
-        len = __unpack_len(buf, size);
+        switch (size) {
+            case 1:
+                len = __unpack_u8(buf);
+                break;
+            case 2:
+                len = __unpack_u16(buf);
+                break;
+            case 4:
+                len = __unpack_u32(buf);
+                break;
+            default:
+                PyErr_BadInternalCall();
+                break;
+        }
     }
     return len;
 }
