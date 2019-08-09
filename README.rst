@@ -102,7 +102,7 @@ object.__reduce__()
 
   * Optionally, the object's state, which will be passed to the object's
     ``__setstate__`` method. If the object has no such method then, the value
-    must be a dictionary and it will be added to the object's ``__dict__``
+    must be a dictionary and it will be merged to the object's ``__dict__``
     attribute.
 
   * Optionally, a sequence/iterator yielding successive items. These items
