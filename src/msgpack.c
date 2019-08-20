@@ -357,20 +357,16 @@ static PyObject *
 Timestamp_fromtimestamp(PyObject *cls, PyObject *timestamp)
 {
     PyTypeObject *type = (PyTypeObject *)cls;
-    PyObject *result = NULL;
 
     if (PyFloat_Check(timestamp)) {
-        result = _Timestamp_FromPyFloat(type, timestamp);
+        return _Timestamp_FromPyFloat(type, timestamp);
     }
-    else if (PyLong_Check(timestamp)) {
-        result = _Timestamp_FromPyLong(type, timestamp);
+    if (PyLong_Check(timestamp)) {
+        return _Timestamp_FromPyLong(type, timestamp);
     }
-    else {
-        PyErr_Format(PyExc_TypeError,
-                     "expected a 'float' or an 'int', got: '%.200s'",
-                     Py_TYPE(timestamp)->tp_name);
-    }
-    return result;
+    return PyErr_Format(PyExc_TypeError,
+                        "expected a 'float' or an 'int', got: '%.200s'",
+                        Py_TYPE(timestamp)->tp_name);
 }
 
 

@@ -208,9 +208,9 @@ Timestamp(seconds[, nanoseconds=0])
 
 
     seconds (*read only*)
-        TODO.
+        *seconds* argument passed to the constructor.
 
 
     nanoseconds (*read only*)
-        TODO.
+        *nanoseconds* argument passed to the constructor.
 
