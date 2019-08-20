@@ -186,6 +186,25 @@ In the unpacking process:
     datetime.datetime(2019, 8, 20, 8, 40, 28, 930768)
     >>>
 
+Packing/unpacking `Timestamp`_ objects is also straightforward:
+
+.. code:: python
+
+    >>> import time
+    >>> from mood import msgpack
+    >>> t = msgpack.Timestamp.fromtimestamp(time.time())
+    >>> t
+    mood.msgpack.Timestamp(1566289250.876258373)
+    >>> msgpack.pack(t)
+    bytearray(b'\xd7\xff\xd0\xea\x91\x14][\xadb')
+    >>>
+
+.. code:: python
+
+    >>> from mood import msgpack
+    >>> msgpack.unpack(bytearray(b'\xd7\xff\xd0\xea\x91\x14][\xadb'))
+    mood.msgpack.Timestamp(1566289250.876258373)
+    >>>
 
 .. _Timestamp:
 
@@ -198,8 +217,8 @@ Timestamp(seconds[, nanoseconds=0])
 
 
     fromtimestamp(timestamp) (*classmethod*)
-        Return a new `Timestamp`_ corresponding to the *timestamp* (int/float)
-        argument.
+        Return a new `Timestamp`_ instance corresponding to the *timestamp*
+        (int/float) argument.
 
 
     timestamp()
