@@ -84,5 +84,26 @@ class TestInt(TestUnpack):
         self._test_samples(self._get_samples(self.limits[3:-3]), ">Bb", 0xd0)
 
 
+class TestFloat(TestUnpack):
+
+    flt32_min = float.fromhex("0x1.000000p-126")
+    flt32_max = float.fromhex("0x1.fffffep+127")
+    flt64_min = float.fromhex("0x1.0000000000000p-1022")
+    flt64_max = float.fromhex("0x1.fffffffffffffp+1023")
+
+    @classmethod
+    def setUpClass(cls):
+        cls.limits = [0.0]
+        for l in (cls.flt32_min, cls.flt32_max, cls.flt64_min, cls.flt64_max):
+            cls.limits.insert(0, -l)
+            cls.limits.append(l)
+
+    def test_float64(self):
+        self._test_samples(self.limits[:], ">Bd", 0xcb)
+
+    def test_float32(self):
+        self._test_samples(self.limits[2:-2], ">Bf", 0xca)
+
+
 if __name__ == "__main__":
     unittest.main()
