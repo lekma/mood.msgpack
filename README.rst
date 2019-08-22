@@ -15,8 +15,10 @@ substitute). It does not expose MessagePack's extensions mechanism but uses it
 internally to pack/unpack non-standard types.
 That said, if you only deal with standard objects/types (``None``, ``True``,
 ``False``, integers, floating point numbers, bytes, strings, tuples and
-dictionaries) you are fine to use this module to produce or consume data that is
-targeted at or originates from other programming languages.
+dictionaries) or MessagePack's specified extension types (`Timestamp`_) then you
+are fine to use this module to produce or consume data that is targeted at or
+originates from other programming languages.
+
 The following documentation is largely adapted from Python's `pickle module
 documentation <https://docs.python.org/3.5/library/pickle.html>`_.
 
