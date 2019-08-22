@@ -206,6 +206,31 @@ Packing/unpacking `Timestamp`_ objects is also straightforward:
     mood.msgpack.Timestamp(1566289250.876258373)
     >>>
 
+Converting between `Timestamp`_ and `datetime.datetime
+<https://docs.python.org/3.5/library/datetime.html#datetime.datetime>`_ objects:
+
+.. code:: python
+
+    >>> import datetime
+    >>> from mood import msgpack
+    >>> d1 = datetime.datetime.now()
+    >>> d1
+    datetime.datetime(2019, 8, 22, 9, 20, 57, 9954)
+    >>> t = msgpack.Timestamp.fromtimestamp(d1.timestamp())
+    >>> t
+    mood.msgpack.Timestamp(1566458457.009953976)
+    >>> d2 = datetime.datetime.fromtimestamp(t.timestamp())
+    >>> d2
+    datetime.datetime(2019, 8, 22, 9, 20, 57, 9954)
+    >>> d2 == d1
+    True
+    >>>
+
+**Note:** `Timestamp`_ objects do not carry timezone information and naive
+`datetime.datetime
+<https://docs.python.org/3.5/library/datetime.html#datetime.datetime>`_
+instances are assumed to represent local time.
+
 .. _Timestamp:
 
 Timestamp(seconds[, nanoseconds=0])
