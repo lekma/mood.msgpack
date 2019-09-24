@@ -68,11 +68,6 @@ static PyObject *__unpack_msg(Py_buffer *msg, Py_ssize_t *off);
 
 
 /* misc */
-#define _PyErr_NegativeSize_(s) \
-    PyErr_Format(PyExc_ValueError, \
-                 "negative size: %zd", s)
-
-
 #define _PyErr_ObjTooLong_(n) \
     PyErr_Format(PyExc_OverflowError, \
                  "%s object too long to pack", n)
@@ -649,10 +644,7 @@ __pack_bin_type(PyObject *msg, Py_ssize_t size, const char *name)
 {
     int res = -1;
 
-    if (size < 0) {
-        _PyErr_NegativeSize_(size);
-    }
-    else if (size < _MSGPACK_UINT8_MAX) {
+    if (size < _MSGPACK_UINT8_MAX) {
         res = __pack_value(msg, _MSGPACK_BIN8, 1, size);
     }
     else if (size < _MSGPACK_UINT16_MAX) {
@@ -676,10 +668,7 @@ __pack_str_type(PyObject *msg, Py_ssize_t size, const char *name)
 {
     int res = -1;
 
-    if (size < 0) {
-        _PyErr_NegativeSize_(size);
-    }
-    else if (size < _MSGPACK_FIXSTR_LEN_MAX) { // fixstr
+    if (size < _MSGPACK_FIXSTR_LEN_MAX) { // fixstr
         res = __pack_type(msg, (_MSGPACK_FIXSTR | (uint8_t)size));
     }
     else if (size < _MSGPACK_UINT8_MAX) {
@@ -706,10 +695,7 @@ __pack_array_type(PyObject *msg, Py_ssize_t size, const char *name)
 {
     int res = -1;
 
-    if (size < 0) {
-        _PyErr_NegativeSize_(size);
-    }
-    else if (size < _MSGPACK_FIXOBJ_LEN_MAX) { // fixarray
+    if (size < _MSGPACK_FIXOBJ_LEN_MAX) { // fixarray
         res = __pack_type(msg, (_MSGPACK_FIXARRAY | (uint8_t)size));
     }
     else if (size < _MSGPACK_UINT16_MAX) {
@@ -753,10 +739,7 @@ __pack_map_type(PyObject *msg, Py_ssize_t size, const char *name)
 {
     int res = -1;
 
-    if (size < 0) {
-        _PyErr_NegativeSize_(size);
-    }
-    else if (size < _MSGPACK_FIXOBJ_LEN_MAX) { // fixmap
+    if (size < _MSGPACK_FIXOBJ_LEN_MAX) { // fixmap
         res = __pack_type(msg, (_MSGPACK_FIXMAP | (uint8_t)size));
     }
     else if (size < _MSGPACK_UINT16_MAX) {
@@ -887,10 +870,7 @@ __pack_ext_type(PyObject *msg, Py_ssize_t size, const char *name)
 {
     int res = -1;
 
-    if (size < 0) {
-        _PyErr_NegativeSize_(size);
-    }
-    else if (size < _MSGPACK_UINT8_MAX) {
+    if (size < _MSGPACK_UINT8_MAX) {
         switch (size) {
             case 1:
                 res = __pack_type(msg, _MSGPACK_FIXEXT1);
