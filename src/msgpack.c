@@ -871,25 +871,23 @@ __pack_ext_type(PyObject *msg, Py_ssize_t size, const char *name)
     int res = -1;
 
     if (size < _MSGPACK_UINT8_MAX) {
-        switch (size) {
-            case 1:
-                res = __pack_type(msg, _MSGPACK_FIXEXT1);
-                break;
-            case 2:
-                res = __pack_type(msg, _MSGPACK_FIXEXT2);
-                break;
-            case 4:
-                res = __pack_type(msg, _MSGPACK_FIXEXT4);
-                break;
-            case 8:
-                res = __pack_type(msg, _MSGPACK_FIXEXT8);
-                break;
-            case 16:
-                res = __pack_type(msg, _MSGPACK_FIXEXT16);
-                break;
-            default:
-                res = __pack_value(msg, _MSGPACK_EXT8, 1, size);
-                break;
+        if (size == 1) {
+            res = __pack_type(msg, _MSGPACK_FIXEXT1);
+        }
+        else if (size == 2) {
+            res = __pack_type(msg, _MSGPACK_FIXEXT2);
+        }
+        else if (size == 4) {
+            res = __pack_type(msg, _MSGPACK_FIXEXT4);
+        }
+        else if (size == 8) {
+            res = __pack_type(msg, _MSGPACK_FIXEXT8);
+        }
+        else if (size == 16) {
+            res = __pack_type(msg, _MSGPACK_FIXEXT16);
+        }
+        else {
+            res = __pack_value(msg, _MSGPACK_EXT8, 1, size);
         }
     }
     else if (size < _MSGPACK_UINT16_MAX) {
@@ -1585,22 +1583,21 @@ _Timestamp_Unpack(Py_buffer *msg, Py_ssize_t size, Py_ssize_t *off)
     PyObject *result = NULL;
 
     if ((buffer = __unpack_buffer(msg, size, off))) {
-        switch (size) {
-            case 4:
-                seconds = (int64_t)__unpack_uint4(buffer);
-                break;
-            case 8:
-                value = __unpack_uint8(buffer);
-                nanoseconds = (uint32_t)(value >> 34);
-                seconds = (int64_t)(value & 0x00000003ffffffffLL);
-                break;
-            case 12:
-                nanoseconds = __unpack_uint4(buffer);
-                seconds = __unpack_int8((buffer + 4));
-                break;
-            default:
-                return PyErr_Format(PyExc_ValueError,
-                                    "invalid timestamp size: %zd", size);
+        if (size == 4) {
+            seconds = (int64_t)__unpack_uint4(buffer);
+        }
+        else if (size == 8) {
+            value = __unpack_uint8(buffer);
+            nanoseconds = (uint32_t)(value >> 34);
+            seconds = (int64_t)(value & 0x00000003ffffffffLL);
+        }
+        else if (size == 12) {
+            nanoseconds = __unpack_uint4(buffer);
+            seconds = __unpack_int8((buffer + 4));
+        }
+        else {
+            return PyErr_Format(PyExc_ValueError,
+                                "invalid timestamp size: %zd", size);
         }
         result = _Timestamp_New(&Timestamp_Type, seconds, nanoseconds);
     }
