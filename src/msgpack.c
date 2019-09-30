@@ -2193,6 +2193,88 @@ __unpack_msg(Py_buffer *msg, Py_ssize_t *off)
 
 
 /* --------------------------------------------------------------------------
+   ipc
+   -------------------------------------------------------------------------- */
+
+static inline int
+__pack_ipc_size(PyObject *msg, Py_ssize_t size, const char *name)
+{
+    int res = -1;
+
+    if (size < _MSGPACK_UINT8_MAX) {
+        res = __pack_value(msg, 0x01, 1, size);
+    }
+    else if (size < _MSGPACK_UINT16_MAX) {
+        res = __pack_value(msg, 0x02, 2, size);
+    }
+    else if (size < _MSGPACK_UINT32_MAX) {
+        res = __pack_value(msg, 0x04, 4, size);
+    }
+    else {
+        PyErr_Format(PyExc_OverflowError,
+                     "%s object data too long to pack", name);
+    }
+    return res;
+}
+
+
+#define __pack_ipc__(m, s, b, n) \
+    ((__pack_ipc_size(m, s, n)) ? -1 : __pack_bytes__(m, s, b))
+
+static inline int
+__pack_ipc(PyObject *msg, PyObject *data, const char *name)
+{
+    Py_ssize_t size = PyByteArray_GET_SIZE(data);
+    const char *buffer = PyByteArray_AS_STRING(data);
+
+    return __pack_ipc__(msg, size, buffer, name);
+}
+
+
+#define __pack_ipc_obj__(m, d, o) \
+    ((__pack_obj(d, o)) ? -1 : __pack_ipc(m, d, Py_TYPE(o)->tp_name))
+
+static inline int
+__pack_ipc_obj(PyObject *msg, PyObject *obj)
+{
+    PyObject *data = NULL;
+    int res = -1;
+
+    if ((data = __new_msg())) {
+        res = __pack_ipc_obj__(msg, data, obj);
+        Py_DECREF(data);
+    }
+    return res;
+}
+
+
+static inline Py_ssize_t
+__unpack_ipc_size__(Py_buffer *msg)
+{
+    Py_ssize_t size = -1, len = msg->len;
+    const char * buf = msg->buf;
+
+    if (len == 1) {
+        size = __unpack_uint1(buf);
+    }
+    else if (len == 2) {
+        size = __unpack_uint2(buf);
+    }
+    else if (len == 4) {
+        size = __unpack_uint4(buf);
+    }
+    else {
+        PyErr_Format(PyExc_ValueError,
+                     "invalid buffer len: %zd", len);
+    }
+    return size;
+}
+
+#define __unpack_ipc_size(m) \
+    (((size = __unpack_ipc_size__(m)) < 0) ? NULL : PyLong_FromSsize_t(size))
+
+
+/* --------------------------------------------------------------------------
    module
    -------------------------------------------------------------------------- */
 
@@ -2253,6 +2335,41 @@ msgpack_unpack(PyObject *module, PyObject *args)
 }
 
 
+/* msgpack._ipc_pack() */
+PyDoc_STRVAR(msgpack__ipc_pack_doc,
+"_ipc_pack(obj) -> msg");
+
+static PyObject *
+msgpack__ipc_pack(PyObject *module, PyObject *obj)
+{
+    PyObject *msg = NULL;
+
+    if ((msg = __new_msg()) && __pack_ipc_obj(msg, obj)) {
+        Py_CLEAR(msg);
+    }
+    return msg;
+}
+
+
+/* msgpack._ipc_size() */
+PyDoc_STRVAR(msgpack__ipc_size_doc,
+"_ipc_size(msg) -> int");
+
+static PyObject *
+msgpack__ipc_size(PyObject *module, PyObject *args)
+{
+    PyObject *result = NULL;
+    Py_buffer msg;
+    Py_ssize_t size = -1;
+
+    if (PyArg_ParseTuple(args, "y*:_ipc_size", &msg)) {
+        result = __unpack_ipc_size(&msg);
+        PyBuffer_Release(&msg);
+    }
+    return result;
+}
+
+
 /* msgpack_def.m_methods */
 static PyMethodDef msgpack_m_methods[] = {
     {"pack", (PyCFunction)msgpack_pack,
@@ -2261,6 +2378,10 @@ static PyMethodDef msgpack_m_methods[] = {
      METH_O, msgpack_register_doc},
     {"unpack", (PyCFunction)msgpack_unpack,
      METH_VARARGS, msgpack_unpack_doc},
+    {"_ipc_pack", (PyCFunction)msgpack__ipc_pack,
+     METH_O, msgpack__ipc_pack_doc},
+    {"_ipc_size", (PyCFunction)msgpack__ipc_size,
+     METH_VARARGS, msgpack__ipc_size_doc},
     {NULL} /* Sentinel */
 };
 
