@@ -10,7 +10,7 @@ short strings require only one extra byte in addition to the strings themselves.
 
 **Note:** This implementation is not geared towards inter language exchange but
 towards serialization/de-serialization of Python object structures (it was
-designed as a `pickle <https://docs.python.org/3.5/library/pickle.html>`_
+designed as a `pickle <https://docs.python.org/3.8/library/pickle.html>`_
 substitute). It does not expose MessagePack's extensions mechanism but uses it
 internally to pack/unpack non-standard types.
 That said, if you only deal with standard objects/types (``None``, ``True``,
@@ -20,7 +20,7 @@ are fine to use this module to produce or consume data that is targeted at or
 originates from other programming languages.
 
 The following documentation is largely adapted from Python's `pickle module
-documentation <https://docs.python.org/3.5/library/pickle.html>`_.
+documentation <https://docs.python.org/3.8/library/pickle.html>`_.
 
 **See also:** `MessagePack specification
 <https://github.com/msgpack/msgpack/blob/master/spec.md>`_
@@ -75,7 +75,7 @@ pack(object)
 
 unpack(message)
   Read a packed object hierarchy from a `bytes-like
-  <https://docs.python.org/3.5/glossary.html#term-bytes-like-object>`_
+  <https://docs.python.org/3.8/glossary.html#term-bytes-like-object>`_
   *message* and return the reconstituted object hierarchy specified therein.
 
 
@@ -83,9 +83,9 @@ Packing Class Instances
 -----------------------
 
 **Note:** This being chiefly based on `pickle's object.__reduce__() interface
-<https://docs.python.org/3.5/library/pickle.html#object.__reduce__>`_,
+<https://docs.python.org/3.8/library/pickle.html#object.__reduce__>`_,
 most built-in objects and most objects defined in the `Python standard library
-<https://docs.python.org/3.5/library/index.html>`_ already conform to it.
+<https://docs.python.org/3.8/library/index.html>`_ already conform to it.
 
 .. _reduce:
 
@@ -161,7 +161,7 @@ Timestamp, datetime, ...
 ------------------------
 
 Packing/unpacking objects from the `datetime
-<https://docs.python.org/3.5/library/datetime.html#module-datetime>`_ module is
+<https://docs.python.org/3.8/library/datetime.html#module-datetime>`_ module is
 straightforward.
 
 In the packing process:
@@ -209,7 +209,7 @@ Packing/unpacking `Timestamp`_ objects is also straightforward:
     >>>
 
 Converting between `Timestamp`_ and `datetime.datetime
-<https://docs.python.org/3.5/library/datetime.html#datetime.datetime>`_ objects:
+<https://docs.python.org/3.8/library/datetime.html#datetime.datetime>`_ objects:
 
 .. code:: python
 
@@ -230,7 +230,7 @@ Converting between `Timestamp`_ and `datetime.datetime
 
 **Note:** `Timestamp`_ objects do not carry timezone information and naive
 `datetime.datetime
-<https://docs.python.org/3.5/library/datetime.html#datetime.datetime>`_
+<https://docs.python.org/3.8/library/datetime.html#datetime.datetime>`_
 instances are assumed to represent local time.
 
 .. _Timestamp:
