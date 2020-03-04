@@ -1706,11 +1706,9 @@ __unpack_class_error(Py_buffer *msg, Py_ssize_t *off)
 
     if ((module = __unpack_msg(msg, off)) &&
         (qualname = __unpack_msg(msg, off))) {
-        if (_PyUnicode_CompareWithId(module, &PyId_builtins)) {
-            if (!PyErr_Occurred()) {
-                PyErr_Format(PyExc_TypeError,
-                             "cannot unpack <class '%U.%U'>", module, qualname);
-            }
+        if (!_PyUnicode_EqualToASCIIId(module, &PyId_builtins)) {
+            PyErr_Format(PyExc_TypeError,
+                         "cannot unpack <class '%U.%U'>", module, qualname);
         }
         else {
             PyErr_Format(PyExc_TypeError,
