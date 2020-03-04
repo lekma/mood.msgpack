@@ -1358,7 +1358,7 @@ __unpack_type(Py_buffer *msg, Py_ssize_t *off)
 
 
 #define __unpack_size(m, s, o) \
-    (((buffer = __unpack_buffer(m, s, o))) ? __unpack_uint##s(buffer) : -1)
+    (((buffer = __unpack_buffer(m, s, o))) ? (Py_ssize_t)__unpack_uint##s(buffer) : -1)
 
 
 #define __unpack_object(t, m, s, o) \
