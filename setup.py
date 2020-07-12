@@ -27,7 +27,7 @@ from os.path import abspath
 
 
 pkg_name = "mood.msgpack"
-pkg_version = "1.3.0"
+pkg_version = "1.5.0"
 pkg_desc = "Python MessagePack implementation"
 
 PKG_VERSION = ("PKG_VERSION", "\"{0}\"".format(pkg_version))
@@ -59,7 +59,16 @@ setup(
 
       ext_package="mood",
       ext_modules=[
-          Extension("msgpack", ["src/msgpack.c"], define_macros=[PKG_VERSION])
+          Extension("msgpack",
+                    [
+                     "src/helpers/helpers.c",
+                     "src/timestamp.c",
+                     "src/pack.c",
+                     "src/object.c",
+                     "src/unpack.c",
+                     "src/msgpack.c"
+                    ],
+                    define_macros=[PKG_VERSION])
       ],
 
       classifiers=[

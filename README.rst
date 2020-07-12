@@ -8,16 +8,10 @@ format. It lets you exchange data among multiple languages like JSON. But it's
 faster and smaller. Small integers are encoded into a single byte, and typical
 short strings require only one extra byte in addition to the strings themselves.
 
-**Note:** This implementation is not geared towards inter language exchange but
-towards serialization/de-serialization of Python object structures (it was
-designed as a `pickle <https://docs.python.org/3.8/library/pickle.html>`_
-substitute). It does not expose MessagePack's extensions mechanism but uses it
-internally to pack/unpack non-standard types.
-That said, if you only deal with standard objects/types (``None``, ``True``,
-``False``, integers, floating point numbers, bytes, strings, tuples and
-dictionaries) or MessagePack's specified extension types (`Timestamp`_) then you
-are fine to use this module to produce or consume data that is targeted at or
-originates from other programming languages.
+**Note:** This implementation is designed as a
+`pickle <https://docs.python.org/3.8/library/pickle.html>`_ substitute.
+It does not expose MessagePack's extensions mechanism but uses it internally to
+pack/unpack non-standard types.
 
 The following documentation is largely adapted from Python's `pickle module
 documentation <https://docs.python.org/3.8/library/pickle.html>`_.
@@ -172,9 +166,9 @@ In the packing process:
     >>> from mood import msgpack
     >>> d = datetime.datetime.now()
     >>> d
-    datetime.datetime(2019, 8, 20, 8, 40, 28, 930768)
+    datetime.datetime(2020, 7, 31, 9, 41, 4, 139362)
     >>> msgpack.pack(d)
-    bytearray(b'\xc7#\x7f\x92\xc7\x12\x06\xa8datetime\xa8datetime\x91\xc4\n\x07\xe3\x08\x14\x08(\x1c\x0e3\xd0')
+    bytearray(b'\xc7#\x7f\x92\xc7\x12\x06\xa8datetime\xa8datetime\x91\xc4\n\x07\xe4\x07\x1f\t)\x04\x02 b')
     >>>
 
 In the unpacking process:
@@ -184,8 +178,8 @@ In the unpacking process:
     >>> import datetime
     >>> from mood import msgpack
     >>> msgpack.register(datetime.datetime)
-    >>> msgpack.unpack(bytearray(b'\xc7#\x7f\x92\xc7\x12\x06\xa8datetime\xa8datetime\x91\xc4\n\x07\xe3\x08\x14\x08(\x1c\x0e3\xd0'))
-    datetime.datetime(2019, 8, 20, 8, 40, 28, 930768)
+    >>> msgpack.unpack(bytearray(b'\xc7#\x7f\x92\xc7\x12\x06\xa8datetime\xa8datetime\x91\xc4\n\x07\xe4\x07\x1f\t)\x04\x02 b'))
+    datetime.datetime(2020, 7, 31, 9, 41, 4, 139362)
     >>>
 
 Packing/unpacking `Timestamp`_ objects is also straightforward:
@@ -196,16 +190,16 @@ Packing/unpacking `Timestamp`_ objects is also straightforward:
     >>> from mood import msgpack
     >>> t = msgpack.Timestamp.fromtimestamp(time.time())
     >>> t
-    mood.msgpack.Timestamp(1566289250.876258373)
+    mood.msgpack.Timestamp(seconds=1596180901, nanoseconds=502492666)
     >>> msgpack.pack(t)
-    bytearray(b'\xd7\xff\xd0\xea\x91\x14][\xadb')
+    bytearray(b'\xd7\xffw\xcd\xb7\xe8_#\xc9\xa5')
     >>>
 
 .. code:: python
 
     >>> from mood import msgpack
-    >>> msgpack.unpack(bytearray(b'\xd7\xff\xd0\xea\x91\x14][\xadb'))
-    mood.msgpack.Timestamp(1566289250.876258373)
+    >>> msgpack.unpack(bytearray(b'\xd7\xffw\xcd\xb7\xe8_#\xc9\xa5'))
+    mood.msgpack.Timestamp(seconds=1596180901, nanoseconds=502492666)
     >>>
 
 Converting between `Timestamp`_ and `datetime.datetime
@@ -217,13 +211,13 @@ Converting between `Timestamp`_ and `datetime.datetime
     >>> from mood import msgpack
     >>> d1 = datetime.datetime.now()
     >>> d1
-    datetime.datetime(2019, 8, 22, 9, 20, 57, 9954)
+    datetime.datetime(2020, 7, 31, 9, 31, 18, 40406)
     >>> t = msgpack.Timestamp.fromtimestamp(d1.timestamp())
     >>> t
-    mood.msgpack.Timestamp(1566458457.009953976)
+    mood.msgpack.Timestamp(seconds=1596180678, nanoseconds=040405989)
     >>> d2 = datetime.datetime.fromtimestamp(t.timestamp())
     >>> d2
-    datetime.datetime(2019, 8, 22, 9, 20, 57, 9954)
+    datetime.datetime(2020, 7, 31, 9, 31, 18, 40406)
     >>> d2 == d1
     True
     >>>
@@ -242,15 +236,25 @@ Timestamp(seconds[, nanoseconds=0])
     * nanoseconds (int: 0)
         Nanoseconds precision in ``range(0, 1000000000)``.
 
+    **Note:** nanoseconds are always added to seconds, so negative timestamps
+    like -1.2 should be instantiated as Timestamp(-2, 800000000).
+
 
     fromtimestamp(timestamp) (*classmethod*)
         Return a new `Timestamp`_ instance corresponding to the *timestamp*
-        (int/float) argument.
+        (int/float) argument. Example:
+
+        .. code:: python
+
+            >>> from mood import msgpack
+            >>> msgpack.Timestamp.fromtimestamp(-1.2)
+            mood.msgpack.Timestamp(seconds=-2, nanoseconds=800000000)
+            >>>
 
 
     timestamp()
         Return the floating point timestamp corresponding to this `Timestamp`_
-        instance.
+        instance. The result of ``self.seconds + (self.nanoseconds / 1000000000)``.
 
 
     seconds (*read only*)
