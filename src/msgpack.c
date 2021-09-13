@@ -1,6 +1,6 @@
 /*
 #
-# Copyright © 2020 Malek Hadj-Ali
+# Copyright © 2021 Malek Hadj-Ali
 # All rights reserved.
 #
 # This file is part of mood.
@@ -52,8 +52,10 @@ msgpack_register(PyObject *module, PyObject *obj)
 {
     module_state *state = NULL;
 
-    if (!(state = _PyModule_GetState(module)) ||
-        RegisterObject(state->registry, obj)) {
+    if (
+        !(state = _PyModule_GetState(module)) ||
+        RegisterObject(state->registry, obj)
+    ) {
         return NULL;
     }
     Py_RETURN_NONE;
@@ -81,12 +83,18 @@ msgpack_unpack(PyObject *module, PyObject *args)
 
 /* msgpack_def.m_methods */
 static PyMethodDef msgpack_m_methods[] = {
-    {"pack", (PyCFunction)msgpack_pack,
-     METH_O, msgpack_pack_doc},
-    {"register", (PyCFunction)msgpack_register,
-     METH_O, msgpack_register_doc},
-    {"unpack", (PyCFunction)msgpack_unpack,
-     METH_VARARGS, msgpack_unpack_doc},
+    {
+        "pack", (PyCFunction)msgpack_pack,
+        METH_O, msgpack_pack_doc
+    },
+    {
+        "register", (PyCFunction)msgpack_register,
+        METH_O, msgpack_register_doc
+    },
+    {
+        "unpack", (PyCFunction)msgpack_unpack,
+        METH_VARARGS, msgpack_unpack_doc
+    },
     {NULL} /* Sentinel */
 };
 
@@ -158,7 +166,7 @@ _module_state_init(PyObject *module)
         !(state->registry = PyDict_New()) ||
         RegisterObject(state->registry, Py_NotImplemented) ||
         RegisterObject(state->registry, Py_Ellipsis)
-       ) {
+    ) {
         return -1;
     }
     return 0;
@@ -172,7 +180,7 @@ _module_init(PyObject *module)
         _module_state_init(module) ||
         PyModule_AddStringConstant(module, "__version__", PKG_VERSION) ||
         _PyModule_AddType(module, "Timestamp", &Timestamp_Type)
-       ) {
+    ) {
         return -1;
     }
     return 0;

@@ -1,6 +1,6 @@
 /*
 #
-# Copyright © 2020 Malek Hadj-Ali
+# Copyright © 2021 Malek Hadj-Ali
 # All rights reserved.
 #
 # This file is part of mood.
@@ -144,7 +144,15 @@ __unpack_sequence(Py_buffer *msg, Py_ssize_t *off, Py_ssize_t size, PyObject **i
     int res = 0;
 
     for (i = 0; i < size; ++i) {
-        if ((res = ((item = UnpackMessage(msg, off)) ? 0 : -1))) {
+        if (
+            (
+                res = (
+                    (
+                        item = UnpackMessage(msg, off)
+                    ) ? 0 : -1
+                )
+            )
+        ) {
             break;
         }
         items[i] = item; // steals ref
@@ -161,9 +169,16 @@ __unpack_dict(Py_buffer *msg, Py_ssize_t *off, Py_ssize_t size, PyObject *items)
     int res = 0;
 
     for (i = 0; i < size; ++i) {
-        if ((res = (((key = UnpackMessage(msg, off)) &&
-                     (val = UnpackMessage(msg, off))) ?
-                    PyDict_SetItem(items, key, val) : -1))) {
+        if (
+            (
+                res = (
+                    (
+                        (key = UnpackMessage(msg, off)) &&
+                        (val = UnpackMessage(msg, off))
+                    ) ? PyDict_SetItem(items, key, val) : -1
+                )
+            )
+        ) {
             Py_XDECREF(key);
             Py_XDECREF(val);
             break;
@@ -178,11 +193,19 @@ __unpack_dict(Py_buffer *msg, Py_ssize_t *off, Py_ssize_t size, PyObject *items)
 /* -------------------------------------------------------------------------- */
 
 #define __unpack_object(t, m, o, s) \
-    ((buffer = __unpack_buffer(m, o, s)) ? t##_FromStringAndSize(buffer, s) : NULL)
+    ( \
+        ( \
+            buffer = __unpack_buffer(m, o, s) \
+        ) ? t##_FromStringAndSize(buffer, s) : NULL \
+    )
 
 
 #define __unpack_size__(m, o, s) \
-    ((buffer = __unpack_buffer(m, o, s)) ? (Py_ssize_t)__unpack_uint##s(buffer) : -1)
+    ( \
+        ( \
+            buffer = __unpack_buffer(m, o, s) \
+        ) ? (Py_ssize_t)__unpack_uint##s(buffer) : -1 \
+    )
 
 
 #define __unpack_size(t, m, o, s) \
@@ -233,8 +256,10 @@ _PyTuple_Unpack(Py_buffer *msg, Py_ssize_t *off, Py_ssize_t size)
     PyObject *result = NULL;
 
     if (!Py_EnterRecursiveCall(_Unpacking_("tuple"))) {
-        if ((result = PyTuple_New(size)) &&
-            __unpack_sequence(msg, off, size, _PyTuple_ITEMS(result))) {
+        if (
+            (result = PyTuple_New(size)) &&
+            __unpack_sequence(msg, off, size, _PyTuple_ITEMS(result))
+        ) {
             Py_CLEAR(result);
         }
         Py_LeaveRecursiveCall();
@@ -254,8 +279,10 @@ _PyDict_Unpack(Py_buffer *msg, Py_ssize_t *off, Py_ssize_t size)
     PyObject *result = NULL;
 
     if (!Py_EnterRecursiveCall(_Unpacking_("dict"))) {
-        if ((result = PyDict_New()) &&
-            __unpack_dict(msg, off, size, result)) {
+        if (
+            (result = PyDict_New()) &&
+            __unpack_dict(msg, off, size, result)
+        ) {
             Py_CLEAR(result);
         }
         Py_LeaveRecursiveCall();
@@ -272,14 +299,24 @@ _PyDict_Unpack(Py_buffer *msg, Py_ssize_t *off, Py_ssize_t size)
    -------------------------------------------------------------------------- */
 
 static inline int
-__unpack_anyset(Py_buffer *msg, Py_ssize_t *off, Py_ssize_t size, PyObject *items)
+__unpack_anyset(
+    Py_buffer *msg, Py_ssize_t *off, Py_ssize_t size, PyObject *items
+)
 {
     PyObject *item = NULL;
     Py_ssize_t i;
     int res = 0;
 
     for (i = 0; i < size; ++i) {
-        if ((res = ((item = UnpackMessage(msg, off)) ? PySet_Add(items, item) : -1))) {
+        if (
+            (
+                res = (
+                    (
+                        item = UnpackMessage(msg, off)
+                    ) ? PySet_Add(items, item) : -1
+                )
+            )
+        ) {
             Py_XDECREF(item);
             break;
         }
@@ -296,9 +333,11 @@ __unpack_registered(Py_buffer *msg, Py_ssize_t *off, Py_ssize_t size)
     module_state *state = NULL;
     PyObject *result = NULL, *key = NULL;
 
-    if ((buffer = __unpack_buffer(msg, off, size)) &&
+    if (
+        (buffer = __unpack_buffer(msg, off, size)) &&
         (state = module_get_state()) &&
-        (key = PyBytes_FromStringAndSize(buffer, size))) {
+        (key = PyBytes_FromStringAndSize(buffer, size))
+    ) {
         if ((result = PyDict_GetItem(state->registry, key))) { // borrowed
             Py_INCREF(result);
         }
@@ -405,8 +444,10 @@ _PyList_Unpack(Py_buffer *msg, Py_ssize_t *off, Py_ssize_t size)
     PyObject *result = NULL;
 
     if (!Py_EnterRecursiveCall(_Unpacking_("list"))) {
-        if ((result = PyList_New(size)) &&
-            __unpack_sequence(msg, off, size, _PyList_ITEMS(result))) {
+        if (
+            (result = PyList_New(size)) &&
+            __unpack_sequence(msg, off, size, _PyList_ITEMS(result))
+        ) {
             Py_CLEAR(result);
         }
         Py_LeaveRecursiveCall();
@@ -426,8 +467,10 @@ _PySet_Unpack(Py_buffer *msg, Py_ssize_t *off, Py_ssize_t size)
     PyObject *result = NULL;
 
     if (!Py_EnterRecursiveCall(_Unpacking_("set"))) {
-        if ((result = PySet_New(NULL)) &&
-            __unpack_anyset(msg, off, size, result)) {
+        if (
+            (result = PySet_New(NULL)) &&
+            __unpack_anyset(msg, off, size, result)
+        ) {
             Py_CLEAR(result);
         }
         Py_LeaveRecursiveCall();
@@ -447,8 +490,10 @@ _PyFrozenSet_Unpack(Py_buffer *msg, Py_ssize_t *off, Py_ssize_t size)
     PyObject *result = NULL;
 
     if (!Py_EnterRecursiveCall(_Unpacking_("frozenset"))) {
-        if ((result = PyFrozenSet_New(NULL)) &&
-            __unpack_anyset(msg, off, size, result)) {
+        if (
+            (result = PyFrozenSet_New(NULL)) &&
+            __unpack_anyset(msg, off, size, result)
+        ) {
             Py_CLEAR(result);
         }
         Py_LeaveRecursiveCall();
@@ -468,15 +513,20 @@ __unpack_class_error(Py_buffer *msg, Py_ssize_t *off)
     _Py_IDENTIFIER(builtins);
     PyObject *module = NULL, *qualname = NULL;
 
-    if ((module = UnpackMessage(msg, off)) &&
-        (qualname = UnpackMessage(msg, off))) {
+    if (
+        (module = UnpackMessage(msg, off)) &&
+        (qualname = UnpackMessage(msg, off))
+    ) {
         if (!_PyUnicode_EqualToASCIIId(module, &PyId_builtins)) {
-            PyErr_Format(PyExc_TypeError,
-                         "cannot unpack <class '%U.%U'>", module, qualname);
+            PyErr_Format(
+                PyExc_TypeError, "cannot unpack <class '%U.%U'>",
+                module, qualname
+            );
         }
         else {
-            PyErr_Format(PyExc_TypeError,
-                         "cannot unpack <class '%U'>", qualname);
+            PyErr_Format(
+                PyExc_TypeError, "cannot unpack <class '%U'>", qualname
+            );
         }
     }
     Py_XDECREF(qualname);
@@ -504,8 +554,7 @@ __unpack_singleton_error(Py_buffer *msg, Py_ssize_t *off)
     PyObject *name = NULL;
 
     if ((name = UnpackMessage(msg, off))) {
-        PyErr_Format(PyExc_TypeError,
-                     "cannot unpack '%U'", name);
+        PyErr_Format(PyExc_TypeError, "cannot unpack '%U'", name);
         Py_DECREF(name);
     }
 }

@@ -1,6 +1,6 @@
 /*
 #
-# Copyright © 2020 Malek Hadj-Ali
+# Copyright © 2021 Malek Hadj-Ali
 # All rights reserved.
 #
 # This file is part of mood.
@@ -63,8 +63,9 @@ _Timestamp_New(PyTypeObject *type, int64_t seconds, uint32_t nanoseconds)
         }
     }
     else {
-        PyErr_SetString(PyExc_OverflowError,
-                        "argument 'nanoseconds' greater than maximum");
+        PyErr_SetString(
+            PyExc_OverflowError, "argument 'nanoseconds' greater than maximum"
+        );
     }
     return _PyObject_CAST(self);
 }
@@ -156,8 +157,10 @@ Timestamp_tp_dealloc(Timestamp *self)
 static PyObject *
 Timestamp_tp_repr(Timestamp *self)
 {
-    return PyUnicode_FromFormat("%s(seconds=%lld, nanoseconds=%09u)",
-        Py_TYPE(self)->tp_name, self->seconds, self->nanoseconds);
+    return PyUnicode_FromFormat(
+        "%s(seconds=%lld, nanoseconds=%09u)",
+        Py_TYPE(self)->tp_name, self->seconds, self->nanoseconds
+    );
 }
 
 
@@ -189,9 +192,10 @@ Timestamp_fromtimestamp(PyObject *cls, PyObject *timestamp)
         result = _Timestamp_FromPyLong(timestamp);
     }
     else {
-        PyErr_Format(PyExc_TypeError,
-                     "expected a 'float' or an 'int', got: '%.200s'",
-                     Py_TYPE(timestamp)->tp_name);
+        PyErr_Format(
+            PyExc_TypeError, "expected a 'float' or an 'int', got: '%.200s'",
+            Py_TYPE(timestamp)->tp_name
+        );
     }
     return result;
 }
@@ -205,24 +209,35 @@ static PyObject *
 Timestamp_timestamp(Timestamp *self)
 {
     return PyFloat_FromDouble(
-        self->seconds + (self->nanoseconds / MSGPACK_NSECS_MAX));
+        self->seconds + (self->nanoseconds / MSGPACK_NSECS_MAX)
+    );
 }
 
 
 /* TimestampType.tp_methods */
 static PyMethodDef Timestamp_tp_methods[] = {
-    {"fromtimestamp", (PyCFunction)Timestamp_fromtimestamp,
-     METH_O | METH_CLASS, Timestamp_fromtimestamp_doc},
-    {"timestamp", (PyCFunction)Timestamp_timestamp,
-     METH_NOARGS, Timestamp_timestamp_doc},
+    {
+        "fromtimestamp", (PyCFunction)Timestamp_fromtimestamp,
+        METH_O | METH_CLASS, Timestamp_fromtimestamp_doc
+    },
+    {
+        "timestamp", (PyCFunction)Timestamp_timestamp,
+        METH_NOARGS, Timestamp_timestamp_doc
+    },
     {NULL}  /* Sentinel */
 };
 
 
 /* Timestamp_Type.tp_members */
 static PyMemberDef Timestamp_tp_members[] = {
-    {"seconds", T_LONGLONG, offsetof(Timestamp, seconds), READONLY, NULL},
-    {"nanoseconds", T_UINT, offsetof(Timestamp, nanoseconds), READONLY, NULL},
+    {
+        "seconds", T_LONGLONG, offsetof(Timestamp, seconds),
+        READONLY, NULL
+    },
+    {
+        "nanoseconds", T_UINT, offsetof(Timestamp, nanoseconds),
+        READONLY, NULL
+    },
     {NULL}  /* Sentinel */
 };
 
@@ -235,8 +250,11 @@ Timestamp_tp_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     int64_t seconds;
     uint32_t nanoseconds = 0;
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "L|I:__new__", kwlist,
-                                     &seconds, &nanoseconds)) {
+    if (
+        !PyArg_ParseTupleAndKeywords(
+            args, kwargs, "L|I:__new__", kwlist, &seconds, &nanoseconds
+        )
+    ) {
         return NULL;
     }
     return _Timestamp_New(type, seconds, nanoseconds);

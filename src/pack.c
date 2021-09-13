@@ -1,6 +1,6 @@
 /*
 #
-# Copyright © 2020 Malek Hadj-Ali
+# Copyright © 2021 Malek Hadj-Ali
 # All rights reserved.
 #
 # This file is part of mood.
@@ -24,8 +24,10 @@
 
 
 #define _PyErr_ObjTooBig_(n, ex) \
-    PyErr_Format(PyExc_OverflowError, "%.200s%s too big to convert", \
-                 n, (ex) ? " extension data" : "")
+    PyErr_Format( \
+        PyExc_OverflowError, "%.200s%s too big to convert", n, \
+        (ex) ? " extension data" : "" \
+    )
 
 
 #define _Packing_(n) _While_(packing, n)
@@ -121,8 +123,10 @@ __msgpack_type__(PyByteArrayObject *self, uint8_t type)
 
 
 static inline int
-__msgpack_buffer__(PyByteArrayObject *self, uint8_t type,
-                   const void *_buffer, size_t _size)
+__msgpack_buffer__(
+    PyByteArrayObject *self, uint8_t type,
+    const void *_buffer, size_t _size
+)
 {
     size_t size = 1 + _size;
 
@@ -136,9 +140,11 @@ __msgpack_buffer__(PyByteArrayObject *self, uint8_t type,
 
 
 static inline int
-__msgpack_buffers__(PyByteArrayObject *self, uint8_t type,
-                    const void *_buffer1, size_t _size1,
-                    const void *_buffer2, size_t _size2)
+__msgpack_buffers__(
+    PyByteArrayObject *self, uint8_t type,
+    const void *_buffer1, size_t _size1,
+    const void *_buffer2, size_t _size2
+)
 {
     size_t size = 1 + _size1 + _size2;
 
@@ -170,22 +176,30 @@ __msgpack_type(PyObject *msg, uint8_t type)
 
 
 static int
-__msgpack_buffer(PyObject *msg, uint8_t type,
-                 const void *_buffer, size_t _size)
+__msgpack_buffer(
+    PyObject *msg, uint8_t type,
+    const void *_buffer, size_t _size
+)
 {
-    return __msgpack_buffer__((PyByteArrayObject *)msg, type,
-                              _buffer, _size);
+    return __msgpack_buffer__(
+        (PyByteArrayObject *)msg, type,
+        _buffer, _size
+    );
 }
 
 
 static int
-__msgpack_buffers(PyObject *msg, uint8_t type,
-                  const void *_buffer1, size_t _size1,
-                  const void *_buffer2, size_t _size2)
+__msgpack_buffers(
+    PyObject *msg, uint8_t type,
+    const void *_buffer1, size_t _size1,
+    const void *_buffer2, size_t _size2
+)
 {
-    return __msgpack_buffers__((PyByteArrayObject *)msg, type,
-                               _buffer1, _size1,
-                               _buffer2, _size2);
+    return __msgpack_buffers__(
+        (PyByteArrayObject *)msg, type,
+        _buffer1, _size1,
+        _buffer2, _size2
+    );
 }
 
 
@@ -702,16 +716,21 @@ __pack_class(PyObject *obj)
     _Py_IDENTIFIER(__qualname__);
     PyObject *data = NULL, *module = NULL, *qualname = NULL;
 
-    if ((module = _PyObject_GetAttrId(obj, &PyId___module__)) &&
-        (qualname = _PyObject_GetAttrId(obj, &PyId___qualname__))) {
+    if (
+        (module = _PyObject_GetAttrId(obj, &PyId___module__)) &&
+        (qualname = _PyObject_GetAttrId(obj, &PyId___qualname__))
+    ) {
         if (!PyUnicode_CheckExact(module) || !PyUnicode_CheckExact(qualname)) {
-            PyErr_Format(PyExc_TypeError,
-                         "expected strings, got: __module__: %.200s, __qualname__: %.200s",
-                         Py_TYPE(module)->tp_name, Py_TYPE(qualname)->tp_name);
+            PyErr_Format(
+                PyExc_TypeError,
+                "expected strings, got: __module__: %.200s, __qualname__: %.200s",
+                Py_TYPE(module)->tp_name, Py_TYPE(qualname)->tp_name
+            );
         }
-        else if ((data = NewMessage()) &&
-                 (_PyUnicode_Pack(data, module) ||
-                  _PyUnicode_Pack(data, qualname))) {
+        else if (
+            (data = NewMessage()) &&
+            (_PyUnicode_Pack(data, module) || _PyUnicode_Pack(data, qualname))
+        ) {
             Py_CLEAR(data);
         }
     }
@@ -730,11 +749,12 @@ __pack_singleton(PyObject *obj)
 
     if ((reduce = _PyObject_CallMethodId(obj, &PyId___reduce__, NULL))) {
         if (!PyUnicode_CheckExact(reduce)) {
-            PyErr_SetString(PyExc_TypeError,
-                            "__reduce__() must return a str");
+            PyErr_SetString(PyExc_TypeError, "__reduce__() must return a str");
         }
-        else if ((data = NewMessage()) &&
-                 _PyUnicode_Pack(data, reduce)) {
+        else if (
+            (data = NewMessage()) &&
+            _PyUnicode_Pack(data, reduce)
+        ) {
             Py_CLEAR(data);
         }
         Py_DECREF(reduce);
@@ -751,9 +771,10 @@ __pack_complex(PyObject *obj)
     Py_complex complex = ((PyComplexObject *)obj)->cval;
     PyObject *data = NULL;
 
-    if ((data = NewMessage()) &&
-        (__pack_float8(data, complex.real) ||
-         __pack_float8(data, complex.imag))) {
+    if (
+        (data = NewMessage()) &&
+        (__pack_float8(data, complex.real) || __pack_float8(data, complex.imag))
+    ) {
         Py_CLEAR(data);
     }
     return data;
@@ -783,8 +804,10 @@ __pack_timestamp(PyObject *obj)
     Timestamp *timestamp = (Timestamp *)obj;
     PyObject *data = NULL;
 
-    if ((data = NewMessage()) &&
-        __pack_timestamp__(data, timestamp->seconds, timestamp->nanoseconds)) {
+    if (
+        (data = NewMessage()) &&
+        __pack_timestamp__(data, timestamp->seconds, timestamp->nanoseconds)
+    ) {
         Py_CLEAR(data);
     }
     return data;
@@ -952,8 +975,9 @@ _PyObject_Pack(PyObject *msg, PyObject *obj, const char *name)
                 }
             }
             else {
-                PyErr_SetString(PyExc_TypeError,
-                                "__reduce__() must return a str or a tuple");
+                PyErr_SetString(
+                    PyExc_TypeError, "__reduce__() must return a str or a tuple"
+                );
             }
             if (type) {
                 res = __pack_extension(msg, data, type, name);
@@ -1022,7 +1046,9 @@ RegisterObject(PyObject *registry, PyObject *obj)
     PyObject *data = NULL, *key = NULL;
     int res = -1;
 
-    if ((data = (PyType_Check(obj) ? __pack_class(obj) : __pack_singleton(obj)))) {
+    if (
+        (data = (PyType_Check(obj) ? __pack_class(obj) : __pack_singleton(obj)))
+    ) {
         if ((key = _PyBytes_FromPyByteArray(data))) {
             res = PyDict_SetItem(registry, key, obj);
             Py_DECREF(key);
