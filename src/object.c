@@ -60,8 +60,8 @@ __PyObject_UpdateDict(PyObject *self, PyObject *arg)
     return res;
 }
 
-static int
-__PyObject_SetState(PyObject *self, PyObject *arg)
+static inline int
+__PyObject_SetState__(PyObject *self, PyObject *arg)
 {
     _Py_IDENTIFIER(__setstate__);
     PyObject *result = NULL;
@@ -73,10 +73,7 @@ __PyObject_SetState(PyObject *self, PyObject *arg)
             )
         )
     ) {
-        if (
-            PyErr_ExceptionMatches(PyExc_AttributeError) &&
-            PyDict_Check(arg)
-        ) {
+        if (PyErr_ExceptionMatches(PyExc_AttributeError) && PyDict_Check(arg)) {
             PyErr_Clear();
             return __PyObject_UpdateDict(self, arg);
         }
@@ -84,6 +81,21 @@ __PyObject_SetState(PyObject *self, PyObject *arg)
     }
     Py_DECREF(result);
     return 0;
+}
+
+static int
+__PyObject_SetState(PyObject *self, PyObject *arg, PyObject *setter)
+{
+    PyObject *result = NULL;
+
+    if (setter && setter != Py_None) {
+        if (!(result = PyObject_CallFunctionObjArgs(setter, self, arg, NULL))) {
+            return -1;
+        }
+        Py_DECREF(result);
+        return 0;
+    }
+    return __PyObject_SetState__(self, arg);
 }
 
 
@@ -245,10 +257,21 @@ __PyCallable_Check(PyObject *arg, void *addr)
         return 1;
     }
     PyErr_Format(
-        PyExc_TypeError, "argument 1 must be a callable, not %.200s",
+        PyExc_TypeError,
+        "tuple item returned by __reduce__() must be a callable, not %.200s",
         Py_TYPE(arg)->tp_name
     );
     return 0;
+}
+
+static int
+__PyCallableOrNone_Check(PyObject *arg, void *addr)
+{
+    if (arg == Py_None) {
+        *(PyObject **)addr = arg;
+        return 1;
+    }
+    return __PyCallable_Check(arg, addr);
 }
 
 PyObject *
@@ -256,17 +279,22 @@ __PyObject_New(PyObject *reduce)
 {
     PyObject *callable, *args;
     PyObject *setstatearg = Py_None, *extendarg = Py_None, *updatearg = Py_None;
+    PyObject *statesetter = Py_None;
     PyObject *self = NULL;
 
     if (
         PyArg_ParseTuple(
-            reduce, "O&O!|OOO",
+            reduce, "O&O!|OOOO&",
             __PyCallable_Check, &callable, &PyTuple_Type, &args,
-            &setstatearg, &extendarg, &updatearg
+            &setstatearg, &extendarg, &updatearg,
+            __PyCallableOrNone_Check, &statesetter
         ) &&
         (self = PyObject_CallObject(callable, args)) &&
         (
-            (setstatearg != Py_None && __PyObject_SetState(self, setstatearg)) ||
+            (
+                setstatearg != Py_None &&
+                __PyObject_SetState(self, setstatearg, statesetter)
+            ) ||
             (extendarg != Py_None && __PyObject_Extend(self, extendarg)) ||
             (updatearg != Py_None && __PyObject_Update(self, updatearg))
         )

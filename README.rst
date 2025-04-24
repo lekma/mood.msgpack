@@ -9,12 +9,12 @@ faster and smaller. Small integers are encoded into a single byte, and typical
 short strings require only one extra byte in addition to the strings themselves.
 
 **Note:** This implementation is designed as a
-`pickle <https://docs.python.org/3.8/library/pickle.html>`_ substitute.
+`pickle <https://docs.python.org/3.10/library/pickle.html>`_ substitute.
 It does not expose MessagePack's extensions mechanism but uses it internally to
 pack/unpack non-standard types.
 
 The following documentation is largely adapted from Python's `pickle module
-documentation <https://docs.python.org/3.8/library/pickle.html>`_.
+documentation <https://docs.python.org/3.10/library/pickle.html>`_.
 
 **See also:** `MessagePack specification
 <https://github.com/msgpack/msgpack/blob/master/spec.md>`_
@@ -69,7 +69,7 @@ pack(object)
 
 unpack(message)
   Read a packed object hierarchy from a `bytes-like
-  <https://docs.python.org/3.8/glossary.html#term-bytes-like-object>`_
+  <https://docs.python.org/3.10/glossary.html#term-bytes-like-object>`_
   *message* and return the reconstituted object hierarchy specified therein.
 
 
@@ -77,9 +77,9 @@ Packing Class Instances
 -----------------------
 
 **Note:** This being chiefly based on `pickle's object.__reduce__() interface
-<https://docs.python.org/3.8/library/pickle.html#object.__reduce__>`_,
+<https://docs.python.org/3.10/library/pickle.html#object.__reduce__>`_,
 most built-in objects and most objects defined in the `Python standard library
-<https://docs.python.org/3.8/library/index.html>`_ already conform to it.
+<https://docs.python.org/3.10/library/index.html>`_ already conform to it.
 
 .. _reduce:
 
@@ -121,6 +121,11 @@ object.__reduce__()
       with the appropriate signature. If the object has no such method then, an
       attempt will be made to store these pairs using ``object[key] = value``.
 
+    * Optionally, a callable with a ``(object, state)`` signature. This callable
+      allows the user to programmatically control the state-updating behavior of
+      a specific object, instead of using ``object``’s own ``__setstate__``
+      method.
+
     A simple example:
 
     .. code:: python
@@ -132,22 +137,69 @@ object.__reduce__()
         ...         self.b = b
         ...     def __repr__(self):
         ...         return "<Kiki object: a={0.a}, b={0.b}>".format(self)
+        ...     def change(self, a, b):
+        ...         self.a = a
+        ...         self.b = b
         ...     def __reduce__(self):
         ...         return (Kiki, (self.a, self.b))
         ...
         >>> k = Kiki(1, 2)
         >>> k
         <Kiki object: a=1, b=2>
+        >>> k.change(3, 4)
+        >>> k
+        <Kiki object: a=3, b=4>
         >>> b = pack(k)
         >>> b
-        bytearray(b'\xc7\x15\x7f\x92\xc7\x0e\x06\xa8__main__\xa4Kiki\x92\x01\x02')
+        bytearray(b'\xc7\x15\x7f\x92\xc7\x0e\x06\xa8__main__\xa4Kiki\x92\x03\x04')
         >>> unpack(b)
         Traceback (most recent call last):
           File "<stdin>", line 1, in <module>
         TypeError: cannot unpack <class '__main__.Kiki'>
         >>> register(Kiki)
         >>> unpack(b)
+        <Kiki object: a=3, b=4>
+        >>>
+
+    Another, less simple, example:
+
+    .. code:: python
+
+        >>> from mood.msgpack import pack, unpack, register
+        >>> def packable(func):
+        ...     func.__reduce__ = lambda: f"{func.__module__}.{func.__qualname__}"
+        ...     return func
+        ...
+        >>> @packable
+        ... def setstate(obj, state):
+        ...     obj.a = state["a"]
+        ...     obj.b = state["b"]
+        ...
+        >>> class Kiki(object):
+        ...     def __init__(self, a=0, b=0):
+        ...         self.a = a
+        ...         self.b = b
+        ...     def __repr__(self):
+        ...         return "<Kiki object: a={0.a}, b={0.b}>".format(self)
+        ...     def change(self, a, b):
+        ...         self.a = a
+        ...         self.b = b
+        ...     def __reduce__(self):
+        ...         return (Kiki, (), {"a": self.a, "b": self.b}, None, None, setstate)
+        ...
+        >>> k = Kiki(1, 2)
+        >>> k
         <Kiki object: a=1, b=2>
+        >>> k.change(3, 4)
+        >>> k
+        <Kiki object: a=3, b=4>
+        >>> b = pack(k)
+        >>> b
+        bytearray(b'\xc71\x7f\x96\xc7\x0e\x06\xa8__main__\xa4Kiki\x90\x82\xa1a\x03\xa1b\x04\xc0\xc0\xc7\x12\x07\xb1__main__.setstate')
+        >>> register(Kiki)
+        >>> register(setstate)
+        >>> unpack(b)
+        <Kiki object: a=3, b=4>
         >>>
 
 
@@ -155,7 +207,7 @@ Timestamp, datetime, ...
 ------------------------
 
 Packing/unpacking objects from the `datetime
-<https://docs.python.org/3.8/library/datetime.html#module-datetime>`_ module is
+<https://docs.python.org/3.10/library/datetime.html#module-datetime>`_ module is
 straightforward.
 
 In the packing process:
@@ -203,7 +255,7 @@ Packing/unpacking `Timestamp`_ objects is also straightforward:
     >>>
 
 Converting between `Timestamp`_ and `datetime.datetime
-<https://docs.python.org/3.8/library/datetime.html#datetime.datetime>`_ objects:
+<https://docs.python.org/3.10/library/datetime.html#datetime.datetime>`_ objects:
 
 .. code:: python
 
@@ -224,7 +276,7 @@ Converting between `Timestamp`_ and `datetime.datetime
 
 **Note:** `Timestamp`_ objects do not carry timezone information and naive
 `datetime.datetime
-<https://docs.python.org/3.8/library/datetime.html#datetime.datetime>`_
+<https://docs.python.org/3.10/library/datetime.html#datetime.datetime>`_
 instances are assumed to represent local time.
 
 .. _Timestamp:

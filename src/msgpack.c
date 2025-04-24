@@ -83,18 +83,9 @@ msgpack_unpack(PyObject *module, PyObject *args)
 
 /* msgpack_def.m_methods */
 static PyMethodDef msgpack_m_methods[] = {
-    {
-        "pack", (PyCFunction)msgpack_pack,
-        METH_O, msgpack_pack_doc
-    },
-    {
-        "register", (PyCFunction)msgpack_register,
-        METH_O, msgpack_register_doc
-    },
-    {
-        "unpack", (PyCFunction)msgpack_unpack,
-        METH_VARARGS, msgpack_unpack_doc
-    },
+    {"pack", (PyCFunction)msgpack_pack, METH_O, msgpack_pack_doc},
+    {"register", (PyCFunction)msgpack_register, METH_O, msgpack_register_doc},
+    {"unpack", (PyCFunction)msgpack_unpack, METH_VARARGS, msgpack_unpack_doc},
     {NULL} /* Sentinel */
 };
 
