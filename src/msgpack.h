@@ -1,25 +1,3 @@
-/*
-#
-# Copyright © 2021 Malek Hadj-Ali
-# All rights reserved.
-#
-# This file is part of mood.
-#
-# mood is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License version 3
-# as published by the Free Software Foundation.
-#
-# mood is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with mood.  If not, see <http://www.gnu.org/licenses/>.
-#
-*/
-
-
 #ifndef Py_MOOD_MSGPACK_H
 #define Py_MOOD_MSGPACK_H
 
@@ -83,8 +61,6 @@ typedef struct {
     PyObject *registry;
 } module_state;
 
-module_state *module_get_state(void);
-
 
 /* interface */
 PyObject *NewMessage(void);
@@ -92,7 +68,7 @@ int RegisterObject(PyObject *registry, PyObject *obj);
 int PackObject(PyObject *msg, PyObject *obj);
 
 PyObject *__PyObject_New(PyObject *reduce);
-PyObject *UnpackMessage(Py_buffer *msg, Py_ssize_t *off);
+PyObject *UnpackMessage(PyObject *registry, Py_buffer *msg, Py_ssize_t *off);
 
 PyObject *NewTimestamp(int64_t seconds, uint32_t nanoseconds);
 

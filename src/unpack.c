@@ -1,25 +1,3 @@
-/*
-#
-# Copyright © 2021 Malek Hadj-Ali
-# All rights reserved.
-#
-# This file is part of mood.
-#
-# mood is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License version 3
-# as published by the Free Software Foundation.
-#
-# mood is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with mood.  If not, see <http://www.gnu.org/licenses/>.
-#
-*/
-
-
 #include "msgpack.h"
 
 
@@ -137,22 +115,20 @@ __unpack_type(Py_buffer *msg, Py_ssize_t *off)
 /* -------------------------------------------------------------------------- */
 
 static inline int
-__unpack_sequence(Py_buffer *msg, Py_ssize_t *off, Py_ssize_t size, PyObject **items)
+__unpack_sequence(
+    PyObject *registry,
+    Py_buffer *msg,
+    Py_ssize_t *off,
+    Py_ssize_t size,
+    PyObject **items
+)
 {
     PyObject *item = NULL;
     Py_ssize_t i;
     int res = 0;
 
     for (i = 0; i < size; ++i) {
-        if (
-            (
-                res = (
-                    (
-                        item = UnpackMessage(msg, off)
-                    ) ? 0 : -1
-                )
-            )
-        ) {
+        if ((res = ((item = UnpackMessage(registry, msg, off)) ? 0 : -1))) {
             break;
         }
         items[i] = item; // steals ref
@@ -162,7 +138,13 @@ __unpack_sequence(Py_buffer *msg, Py_ssize_t *off, Py_ssize_t size, PyObject **i
 
 
 static inline int
-__unpack_dict(Py_buffer *msg, Py_ssize_t *off, Py_ssize_t size, PyObject *items)
+__unpack_dict(
+    PyObject *registry,
+    Py_buffer *msg,
+    Py_ssize_t *off,
+    Py_ssize_t size,
+    PyObject *items
+)
 {
     PyObject *key = NULL, *val = NULL;
     Py_ssize_t i;
@@ -173,8 +155,8 @@ __unpack_dict(Py_buffer *msg, Py_ssize_t *off, Py_ssize_t size, PyObject *items)
             (
                 res = (
                     (
-                        (key = UnpackMessage(msg, off)) &&
-                        (val = UnpackMessage(msg, off))
+                        (key = UnpackMessage(registry, msg, off)) &&
+                        (val = UnpackMessage(registry, msg, off))
                     ) ? PyDict_SetItem(items, key, val) : -1
                 )
             )
@@ -210,6 +192,10 @@ __unpack_dict(Py_buffer *msg, Py_ssize_t *off, Py_ssize_t size, PyObject *items)
 
 #define __unpack_size(t, m, o, s) \
     (((size = __unpack_size__(m, o, s)) < 0) ? NULL : _##t##_Unpack(m, o, size))
+
+
+#define __unpack_size_r(t, r, m, o, s) \
+    (((size = __unpack_size__(m, o, s)) < 0) ? NULL : _##t##_Unpack(r, m, o, size))
 
 
 /* MSGPACK_UINT ------------------------------------------------------------- */
@@ -251,14 +237,16 @@ __unpack_dict(Py_buffer *msg, Py_ssize_t *off, Py_ssize_t size, PyObject *items)
 /* MSGPACK_ARRAY, MSGPACK_FIXARRAY ------------------------------------------ */
 
 static PyObject *
-_PyTuple_Unpack(Py_buffer *msg, Py_ssize_t *off, Py_ssize_t size)
+_PyTuple_Unpack(
+    PyObject *registry, Py_buffer *msg, Py_ssize_t *off, Py_ssize_t size
+)
 {
     PyObject *result = NULL;
 
     if (!Py_EnterRecursiveCall(_Unpacking_("tuple"))) {
         if (
             (result = PyTuple_New(size)) &&
-            __unpack_sequence(msg, off, size, _PyTuple_ITEMS(result))
+            __unpack_sequence(registry, msg, off, size, _PyTuple_ITEMS(result))
         ) {
             Py_CLEAR(result);
         }
@@ -267,21 +255,23 @@ _PyTuple_Unpack(Py_buffer *msg, Py_ssize_t *off, Py_ssize_t size)
     return result;
 }
 
-#define _PyTuple_Unpack_(m, o, s) \
-    __unpack_size(PyTuple, m, o, s)
+#define _PyTuple_Unpack_(r, m, o, s) \
+    __unpack_size_r(PyTuple, r, m, o, s)
 
 
 /* MSGPACK_MAP, MSGPACK_FIXMAP ---------------------------------------------- */
 
 static PyObject *
-_PyDict_Unpack(Py_buffer *msg, Py_ssize_t *off, Py_ssize_t size)
+_PyDict_Unpack(
+    PyObject *registry, Py_buffer *msg, Py_ssize_t *off, Py_ssize_t size
+)
 {
     PyObject *result = NULL;
 
     if (!Py_EnterRecursiveCall(_Unpacking_("dict"))) {
         if (
             (result = PyDict_New()) &&
-            __unpack_dict(msg, off, size, result)
+            __unpack_dict(registry, msg, off, size, result)
         ) {
             Py_CLEAR(result);
         }
@@ -290,8 +280,8 @@ _PyDict_Unpack(Py_buffer *msg, Py_ssize_t *off, Py_ssize_t size)
     return result;
 }
 
-#define _PyDict_Unpack_(m, o, s) \
-    __unpack_size(PyDict, m, o, s)
+#define _PyDict_Unpack_(r, m, o, s) \
+    __unpack_size_r(PyDict, r, m, o, s)
 
 
 /* --------------------------------------------------------------------------
@@ -300,7 +290,11 @@ _PyDict_Unpack(Py_buffer *msg, Py_ssize_t *off, Py_ssize_t size)
 
 static inline int
 __unpack_anyset(
-    Py_buffer *msg, Py_ssize_t *off, Py_ssize_t size, PyObject *items
+    PyObject *registry,
+    Py_buffer *msg,
+    Py_ssize_t *off,
+    Py_ssize_t size,
+    PyObject *items
 )
 {
     PyObject *item = NULL;
@@ -312,7 +306,7 @@ __unpack_anyset(
             (
                 res = (
                     (
-                        item = UnpackMessage(msg, off)
+                        item = UnpackMessage(registry, msg, off)
                     ) ? PySet_Add(items, item) : -1
                 )
             )
@@ -327,18 +321,18 @@ __unpack_anyset(
 
 
 static inline PyObject *
-__unpack_registered(Py_buffer *msg, Py_ssize_t *off, Py_ssize_t size)
+__unpack_registered(
+    PyObject *registry, Py_buffer *msg, Py_ssize_t *off, Py_ssize_t size
+)
 {
     const char *buffer = NULL;
-    module_state *state = NULL;
     PyObject *result = NULL, *key = NULL;
 
     if (
         (buffer = __unpack_buffer(msg, off, size)) &&
-        (state = module_get_state()) &&
         (key = PyBytes_FromStringAndSize(buffer, size))
     ) {
-        if ((result = PyDict_GetItem(state->registry, key))) { // borrowed
+        if ((result = PyDict_GetItem(registry, key))) { // borrowed
             Py_INCREF(result);
         }
         Py_DECREF(key);
@@ -372,8 +366,8 @@ __unpack_len__(Py_buffer *msg, Py_ssize_t *off)
     return len;
 }
 
-#define __unpack_len(t, m, o) \
-    (((len = __unpack_len__(m, o)) < 0) ? NULL : _##t##_Unpack(m, o, len))
+#define __unpack_len(t, r, m, o) \
+    (((len = __unpack_len__(m, o)) < 0) ? NULL : _##t##_Unpack(r, m, o, len))
 
 
 /* MSGPACK_EXT_TIMESTAMP ---------------------------------------------------- */
@@ -439,14 +433,16 @@ _PyComplex_Unpack(Py_buffer *msg, Py_ssize_t *off, Py_ssize_t size)
 /* MSGPACK_EXT_PYLIST ------------------------------------------------------- */
 
 static PyObject *
-_PyList_Unpack(Py_buffer *msg, Py_ssize_t *off, Py_ssize_t size)
+_PyList_Unpack(
+    PyObject *registry, Py_buffer *msg, Py_ssize_t *off, Py_ssize_t size
+)
 {
     PyObject *result = NULL;
 
     if (!Py_EnterRecursiveCall(_Unpacking_("list"))) {
         if (
             (result = PyList_New(size)) &&
-            __unpack_sequence(msg, off, size, _PyList_ITEMS(result))
+            __unpack_sequence(registry, msg, off, size, _PyList_ITEMS(result))
         ) {
             Py_CLEAR(result);
         }
@@ -455,21 +451,23 @@ _PyList_Unpack(Py_buffer *msg, Py_ssize_t *off, Py_ssize_t size)
     return result;
 }
 
-#define _PyList_Unpack_(m, o) \
-    __unpack_len(PyList, m, o)
+#define _PyList_Unpack_(r, m, o) \
+    __unpack_len(PyList, r, m, o)
 
 
 /* MSGPACK_EXT_PYSET -------------------------------------------------------- */
 
 static PyObject *
-_PySet_Unpack(Py_buffer *msg, Py_ssize_t *off, Py_ssize_t size)
+_PySet_Unpack(
+    PyObject *registry, Py_buffer *msg, Py_ssize_t *off, Py_ssize_t size
+)
 {
     PyObject *result = NULL;
 
     if (!Py_EnterRecursiveCall(_Unpacking_("set"))) {
         if (
             (result = PySet_New(NULL)) &&
-            __unpack_anyset(msg, off, size, result)
+            __unpack_anyset(registry, msg, off, size, result)
         ) {
             Py_CLEAR(result);
         }
@@ -478,21 +476,23 @@ _PySet_Unpack(Py_buffer *msg, Py_ssize_t *off, Py_ssize_t size)
     return result;
 }
 
-#define _PySet_Unpack_(m, o) \
-    __unpack_len(PySet, m, o)
+#define _PySet_Unpack_(r, m, o) \
+    __unpack_len(PySet, r, m, o)
 
 
 /* MSGPACK_EXT_PYFROZENSET -------------------------------------------------- */
 
 static PyObject *
-_PyFrozenSet_Unpack(Py_buffer *msg, Py_ssize_t *off, Py_ssize_t size)
+_PyFrozenSet_Unpack(
+    PyObject *registry, Py_buffer *msg, Py_ssize_t *off, Py_ssize_t size
+)
 {
     PyObject *result = NULL;
 
     if (!Py_EnterRecursiveCall(_Unpacking_("frozenset"))) {
         if (
             (result = PyFrozenSet_New(NULL)) &&
-            __unpack_anyset(msg, off, size, result)
+            __unpack_anyset(registry, msg, off, size, result)
         ) {
             Py_CLEAR(result);
         }
@@ -501,21 +501,21 @@ _PyFrozenSet_Unpack(Py_buffer *msg, Py_ssize_t *off, Py_ssize_t size)
     return result;
 }
 
-#define _PyFrozenSet_Unpack_(m, o) \
-    __unpack_len(PyFrozenSet, m, o)
+#define _PyFrozenSet_Unpack_(r, m, o) \
+    __unpack_len(PyFrozenSet, r, m, o)
 
 
 /* MSGPACK_EXT_PYCLASS ------------------------------------------------------ */
 
 static inline void
-__unpack_class_error(Py_buffer *msg, Py_ssize_t *off)
+__unpack_class_error(PyObject *registry, Py_buffer *msg, Py_ssize_t *off)
 {
     _Py_IDENTIFIER(builtins);
     PyObject *module = NULL, *qualname = NULL;
 
     if (
-        (module = UnpackMessage(msg, off)) &&
-        (qualname = UnpackMessage(msg, off))
+        (module = UnpackMessage(registry, msg, off)) &&
+        (qualname = UnpackMessage(registry, msg, off))
     ) {
         if (!_PyUnicode_EqualToASCIIId(module, &PyId_builtins)) {
             PyErr_Format(
@@ -534,13 +534,18 @@ __unpack_class_error(Py_buffer *msg, Py_ssize_t *off)
 }
 
 static PyObject *
-_PyClass_Unpack(Py_buffer *msg, Py_ssize_t *off, Py_ssize_t size)
+_PyClass_Unpack(
+    PyObject *registry, Py_buffer *msg, Py_ssize_t *off, Py_ssize_t size
+)
 {
     Py_ssize_t poff = *off; // keep the original offset in case of error
     PyObject *result = NULL;
 
-    if (!(result = __unpack_registered(msg, off, size))) {
-        __unpack_class_error(msg, &poff);
+    if (
+        !(result = __unpack_registered(registry, msg, off, size)) &&
+        !PyErr_Occurred()
+    ) {
+        __unpack_class_error(registry, msg, &poff);
     }
     return result;
 }
@@ -549,24 +554,29 @@ _PyClass_Unpack(Py_buffer *msg, Py_ssize_t *off, Py_ssize_t size)
 /* MSGPACK_EXT_PYSINGLETON -------------------------------------------------- */
 
 static inline void
-__unpack_singleton_error(Py_buffer *msg, Py_ssize_t *off)
+__unpack_singleton_error(PyObject *registry, Py_buffer *msg, Py_ssize_t *off)
 {
     PyObject *name = NULL;
 
-    if ((name = UnpackMessage(msg, off))) {
+    if ((name = UnpackMessage(registry, msg, off))) {
         PyErr_Format(PyExc_TypeError, "cannot unpack '%U'", name);
         Py_DECREF(name);
     }
 }
 
 static PyObject *
-_PySingleton_Unpack(Py_buffer *msg, Py_ssize_t *off, Py_ssize_t size)
+_PySingleton_Unpack(
+    PyObject *registry, Py_buffer *msg, Py_ssize_t *off, Py_ssize_t size
+)
 {
     Py_ssize_t poff = *off; // keep the original offset in case of error
     PyObject *result = NULL;
 
-    if (!(result = __unpack_registered(msg, off, size))) {
-        __unpack_singleton_error(msg, &poff);
+    if (
+        !(result = __unpack_registered(registry, msg, off, size)) &&
+        !PyErr_Occurred()
+    ) {
+        __unpack_singleton_error(registry, msg, &poff);
     }
     return result;
 }
@@ -575,11 +585,11 @@ _PySingleton_Unpack(Py_buffer *msg, Py_ssize_t *off, Py_ssize_t size)
 /* MSGPACK_EXT_PYOBJECT ----------------------------------------------------- */
 
 static PyObject *
-_PyObject_Unpack_(Py_buffer *msg, Py_ssize_t *off)
+_PyObject_Unpack_(PyObject *registry, Py_buffer *msg, Py_ssize_t *off)
 {
     PyObject *result = NULL, *reduce = NULL;
 
-    if ((reduce = UnpackMessage(msg, off))) {
+    if ((reduce = UnpackMessage(registry, msg, off))) {
         result = __PyObject_New(reduce);
         Py_DECREF(reduce);
     }
@@ -590,7 +600,9 @@ _PyObject_Unpack_(Py_buffer *msg, Py_ssize_t *off)
 /* MSGPACK_EXT, MSGPACK_FIXEXT ---------------------------------------------- */
 
 static PyObject *
-_Extension_Unpack(Py_buffer *msg, Py_ssize_t *off, Py_ssize_t size)
+_Extension_Unpack(
+    PyObject *registry, Py_buffer *msg, Py_ssize_t *off, Py_ssize_t size
+)
 {
     uint8_t type = MSGPACK_INVALID;
     const char *buffer = NULL;
@@ -612,22 +624,22 @@ _Extension_Unpack(Py_buffer *msg, Py_ssize_t *off, Py_ssize_t size)
             result = _PyByteArray_Unpack(msg, off, size);
             break;
         case MSGPACK_EXT_PYLIST:
-            result = _PyList_Unpack_(msg, off);
+            result = _PyList_Unpack_(registry, msg, off);
             break;
         case MSGPACK_EXT_PYSET:
-            result = _PySet_Unpack_(msg, off);
+            result = _PySet_Unpack_(registry, msg, off);
             break;
         case MSGPACK_EXT_PYFROZENSET:
-            result = _PyFrozenSet_Unpack_(msg, off);
+            result = _PyFrozenSet_Unpack_(registry, msg, off);
             break;
         case MSGPACK_EXT_PYCLASS:
-            result = _PyClass_Unpack(msg, off, size);
+            result = _PyClass_Unpack(registry, msg, off, size);
             break;
         case MSGPACK_EXT_PYSINGLETON:
-            result = _PySingleton_Unpack(msg, off, size);
+            result = _PySingleton_Unpack(registry, msg, off, size);
             break;
         case MSGPACK_EXT_PYOBJECT:
-            result = _PyObject_Unpack_(msg, off);
+            result = _PyObject_Unpack_(registry, msg, off);
             break;
         default:
             _PyErr_UnknownType_("extension", type);
@@ -636,8 +648,8 @@ _Extension_Unpack(Py_buffer *msg, Py_ssize_t *off, Py_ssize_t size)
     return result;
 }
 
-#define _Extension_Unpack_(m, o, s) \
-    __unpack_size(Extension, m, o, s)
+#define _Extension_Unpack_(r, m, o, s) \
+    __unpack_size_r(Extension, r, m, o, s)
 
 
 /* --------------------------------------------------------------------------
@@ -645,7 +657,7 @@ _Extension_Unpack(Py_buffer *msg, Py_ssize_t *off, Py_ssize_t size)
    -------------------------------------------------------------------------- */
 
 PyObject *
-UnpackMessage(Py_buffer *msg, Py_ssize_t *off)
+UnpackMessage(PyObject *registry, Py_buffer *msg, Py_ssize_t *off)
 {
     uint8_t type = MSGPACK_INVALID;
     const char *buffer = NULL;
@@ -662,10 +674,10 @@ UnpackMessage(Py_buffer *msg, Py_ssize_t *off)
         result = PyLong_FromUnsignedLong(type);
     }
     else if ((MSGPACK_FIXMAP <= type) && (type <= MSGPACK_FIXMAP_END)) {
-        result = _PyDict_Unpack(msg, off, (type & MSGPACK_FIXOBJ_BIT));
+        result = _PyDict_Unpack(registry, msg, off, (type & MSGPACK_FIXOBJ_BIT));
     }
     else if ((MSGPACK_FIXARRAY <= type) && (type <= MSGPACK_FIXARRAY_END)) {
-        result = _PyTuple_Unpack(msg, off, (type & MSGPACK_FIXOBJ_BIT));
+        result = _PyTuple_Unpack(registry, msg, off, (type & MSGPACK_FIXOBJ_BIT));
     }
     else if ((MSGPACK_FIXSTR <= type) && (type <= MSGPACK_FIXSTR_END)) {
         result = _PyUnicode_Unpack(msg, off, (type & MSGPACK_FIXSTR_BIT));
@@ -673,13 +685,13 @@ UnpackMessage(Py_buffer *msg, Py_ssize_t *off)
     else {
         switch (type) {
             case MSGPACK_NIL:
-                result = __Py_INCREF(Py_None);
+                result = Py_NewRef(Py_None);
                 break;
             case MSGPACK_FALSE:
-                result = __Py_INCREF(Py_False);
+                result = Py_NewRef(Py_False);
                 break;
             case MSGPACK_TRUE:
-                result = __Py_INCREF(Py_True);
+                result = Py_NewRef(Py_True);
                 break;
             case MSGPACK_BIN1:
                 result = _PyBytes_Unpack_(msg, off, 1);
@@ -691,13 +703,13 @@ UnpackMessage(Py_buffer *msg, Py_ssize_t *off)
                 result = _PyBytes_Unpack_(msg, off, 4);
                 break;
             case MSGPACK_EXT1:
-                result = _Extension_Unpack_(msg, off, 1);
+                result = _Extension_Unpack_(registry, msg, off, 1);
                 break;
             case MSGPACK_EXT2:
-                result = _Extension_Unpack_(msg, off, 2);
+                result = _Extension_Unpack_(registry, msg, off, 2);
                 break;
             case MSGPACK_EXT4:
-                result = _Extension_Unpack_(msg, off, 4);
+                result = _Extension_Unpack_(registry, msg, off, 4);
                 break;
             case MSGPACK_FLOAT4:
                 result = _PyFloat_Unpack(msg, off, 4);
@@ -730,19 +742,19 @@ UnpackMessage(Py_buffer *msg, Py_ssize_t *off)
                 result = _PyLong_Unpack(msg, off, 8);
                 break;
             case MSGPACK_FIXEXT1:
-                result = _Extension_Unpack(msg, off, 1);
+                result = _Extension_Unpack(registry, msg, off, 1);
                 break;
             case MSGPACK_FIXEXT2:
-                result = _Extension_Unpack(msg, off, 2);
+                result = _Extension_Unpack(registry, msg, off, 2);
                 break;
             case MSGPACK_FIXEXT4:
-                result = _Extension_Unpack(msg, off, 4);
+                result = _Extension_Unpack(registry, msg, off, 4);
                 break;
             case MSGPACK_FIXEXT8:
-                result = _Extension_Unpack(msg, off, 8);
+                result = _Extension_Unpack(registry, msg, off, 8);
                 break;
             case MSGPACK_FIXEXT16:
-                result = _Extension_Unpack(msg, off, 16);
+                result = _Extension_Unpack(registry, msg, off, 16);
                 break;
             case MSGPACK_STR1:
                 result = _PyUnicode_Unpack_(msg, off, 1);
@@ -754,16 +766,16 @@ UnpackMessage(Py_buffer *msg, Py_ssize_t *off)
                 result = _PyUnicode_Unpack_(msg, off, 4);
                 break;
             case MSGPACK_ARRAY2:
-                result = _PyTuple_Unpack_(msg, off, 2);
+                result = _PyTuple_Unpack_(registry, msg, off, 2);
                 break;
             case MSGPACK_ARRAY4:
-                result = _PyTuple_Unpack_(msg, off, 4);
+                result = _PyTuple_Unpack_(registry, msg, off, 4);
                 break;
             case MSGPACK_MAP2:
-                result = _PyDict_Unpack_(msg, off, 2);
+                result = _PyDict_Unpack_(registry, msg, off, 2);
                 break;
             case MSGPACK_MAP4:
-                result = _PyDict_Unpack_(msg, off, 4);
+                result = _PyDict_Unpack_(registry, msg, off, 4);
                 break;
             default:
                 _PyErr_UnknownType_(NULL, type);

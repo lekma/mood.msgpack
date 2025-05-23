@@ -315,4 +315,3 @@ Timestamp(seconds[, nanoseconds=0])
 
     nanoseconds (*read only*)
         *nanoseconds* argument passed to the constructor.
-
