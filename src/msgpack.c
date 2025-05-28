@@ -23,18 +23,21 @@ msgpack_pack(PyObject *module, PyObject *obj)
 
 /* msgpack.register() */
 PyDoc_STRVAR(msgpack_register_doc,
-"register(obj)");
+"register(*args)");
 
 static PyObject *
-msgpack_register(PyObject *module, PyObject *obj)
+msgpack_register(PyObject *module, PyObject *args)
 {
     module_state *state = NULL;
+    Py_ssize_t len = PyTuple_GET_SIZE(args), i;
 
-    if (
-        !(state = _PyModule_GetState(module)) ||
-        RegisterObject(state->registry, obj)
-    ) {
+    if (!(state = _PyModule_GetState(module))) {
         return NULL;
+    }
+    for (i = 0; i < len; ++i) {
+        if (RegisterObject(state->registry, PyTuple_GET_ITEM(args, i))) {
+            return NULL;
+        }
     }
     Py_RETURN_NONE;
 }
@@ -66,7 +69,7 @@ msgpack_unpack(PyObject *module, PyObject *args)
 /* msgpack_def.m_methods */
 static PyMethodDef msgpack_m_methods[] = {
     {"pack", (PyCFunction)msgpack_pack, METH_O, msgpack_pack_doc},
-    {"register", (PyCFunction)msgpack_register, METH_O, msgpack_register_doc},
+    {"register", (PyCFunction)msgpack_register, METH_VARARGS, msgpack_register_doc},
     {"unpack", (PyCFunction)msgpack_unpack, METH_VARARGS, msgpack_unpack_doc},
     {NULL} /* Sentinel */
 };

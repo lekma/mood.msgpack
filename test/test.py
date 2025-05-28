@@ -1,6 +1,9 @@
-import unittest
-import random
+import collections
+import datetime
 import math
+import pathlib
+import random
+import unittest
 
 import reference
 
@@ -30,7 +33,29 @@ class _TestCase_(unittest.TestCase):
 class TestConstant(_TestCase_):
 
     def test_constants(self):
-        self._test_constants((None, True, False, ..., NotImplemented))
+        self._test_constants(
+            (
+                None,
+                True,
+                False,
+                ...,
+                NotImplemented,
+                collections.deque,
+                datetime.datetime,
+                pathlib.Path,
+            )
+        )
+
+class TestInstance(_TestCase_):
+
+    def test_instances(self):
+        self._test_samples(
+            (
+                datetime.datetime.now(),
+                datetime.datetime.today(),
+                pathlib.Path('.'),
+            )
+        )
 
 
 # ------------------------------------------------------------------------------
@@ -197,6 +222,17 @@ class TestTuple(_TestCase_, _TestSeq_, _TestCont_):
     #    self.assertRaises(OverflowError, msgpack.pack, self._i * (1 << 32))
 
 
+class TestList(_TestCase_, _TestSeq_, _TestCont_):
+
+    _i = [None,]
+
+    def test_fixarray(self):
+        self._test_samples((self._i * s for s in range(0, 16)))
+
+    #def test_overflow(self):
+    #    self.assertRaises(OverflowError, msgpack.pack, self._i * (1 << 32))
+
+
 class TestDict(_TestCase_, _TestCont_):
 
     @staticmethod
@@ -220,4 +256,7 @@ class TestDict(_TestCase_, _TestCont_):
 # ------------------------------------------------------------------------------
 
 if __name__ == "__main__":
+    msgpack.register(
+        collections.deque, datetime.datetime, pathlib.Path, pathlib.PosixPath
+    )
     unittest.main()
