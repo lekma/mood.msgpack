@@ -68,7 +68,7 @@ int RegisterObject(PyObject *registry, PyObject *obj);
 int PackObject(PyObject *msg, PyObject *obj);
 
 PyObject *__PyObject_New(PyObject *reduce);
-PyObject *UnpackMessage(PyObject *registry, Py_buffer *msg, Py_ssize_t *off);
+PyObject *UnpackMessage(PyObject *module, Py_buffer *msg, Py_ssize_t *off);
 
 PyObject *NewTimestamp(int64_t seconds, uint32_t nanoseconds);
 

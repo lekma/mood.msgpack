@@ -53,13 +53,9 @@ msgpack_unpack(PyObject *module, PyObject *args)
     PyObject *result = NULL;
     Py_buffer msg;
     Py_ssize_t off = 0;
-    module_state *state = NULL;
 
-    if (
-        PyArg_ParseTuple(args, "y*:unpack", &msg) &&
-        (state = __PyModule_GetState__(module))
-    ) {
-        result = UnpackMessage(state->registry, &msg, &off);
+    if (PyArg_ParseTuple(args, "y*:unpack", &msg)) {
+        result = UnpackMessage(module, &msg, &off);
         PyBuffer_Release(&msg);
     }
     return result;
