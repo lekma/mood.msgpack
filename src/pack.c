@@ -692,28 +692,35 @@ __pack_class(PyObject *obj)
 {
     _Py_IDENTIFIER(__module__);
     _Py_IDENTIFIER(__qualname__);
-    PyObject *data = NULL, *module = NULL, *qualname = NULL;
+    PyObject *data = NULL, *_modname_ = NULL, *_qualname_ = NULL;
 
     if (
-        (module = _PyObject_GetAttrId(obj, &PyId___module__)) &&
-        (qualname = _PyObject_GetAttrId(obj, &PyId___qualname__))
+        (_modname_ = _PyObject_GetAttrId(obj, &PyId___module__)) &&
+        (_qualname_ = _PyObject_GetAttrId(obj, &PyId___qualname__))
     ) {
-        if (!PyUnicode_CheckExact(module) || !PyUnicode_CheckExact(qualname)) {
+        if (
+            !PyUnicode_CheckExact(_modname_) ||
+            !PyUnicode_CheckExact(_qualname_)
+        ) {
             PyErr_Format(
                 PyExc_TypeError,
                 "expected strings, got: __module__: %.200s, __qualname__: %.200s",
-                Py_TYPE(module)->tp_name, Py_TYPE(qualname)->tp_name
+                Py_TYPE(_modname_)->tp_name,
+                Py_TYPE(_qualname_)->tp_name
             );
         }
         else if (
             (data = NewMessage()) &&
-            (_PyUnicode_Pack(data, module) || _PyUnicode_Pack(data, qualname))
+            (
+                _PyUnicode_Pack(data, _modname_) ||
+                _PyUnicode_Pack(data, _qualname_)
+            )
         ) {
             Py_CLEAR(data);
         }
     }
-    Py_XDECREF(qualname);
-    Py_XDECREF(module);
+    Py_XDECREF(_qualname_);
+    Py_XDECREF(_modname_);
     return data;
 }
 

@@ -511,26 +511,28 @@ static inline void
 __unpack_class_error(PyObject *registry, Py_buffer *msg, Py_ssize_t *off)
 {
     _Py_IDENTIFIER(builtins);
-    PyObject *module = NULL, *qualname = NULL;
+    PyObject *_modname_ = NULL, *_qualname_ = NULL;
 
     if (
-        (module = UnpackMessage(registry, msg, off)) &&
-        (qualname = UnpackMessage(registry, msg, off))
+        (_modname_ = UnpackMessage(registry, msg, off)) &&
+        (_qualname_ = UnpackMessage(registry, msg, off))
     ) {
-        if (!_PyUnicode_EqualToASCIIId(module, &PyId_builtins)) {
+        if (!_PyUnicode_EqualToASCIIId(_modname_, &PyId_builtins)) {
             PyErr_Format(
-                PyExc_TypeError, "cannot unpack <class '%U.%U'>",
-                module, qualname
+                PyExc_TypeError,
+                "cannot unpack <class '%U.%U'>",
+                _modname_,
+                _qualname_
             );
         }
         else {
             PyErr_Format(
-                PyExc_TypeError, "cannot unpack <class '%U'>", qualname
+                PyExc_TypeError, "cannot unpack <class '%U'>", _qualname_
             );
         }
     }
-    Py_XDECREF(qualname);
-    Py_XDECREF(module);
+    Py_XDECREF(_qualname_);
+    Py_XDECREF(_modname_);
 }
 
 static PyObject *
