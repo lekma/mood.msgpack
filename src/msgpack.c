@@ -31,7 +31,7 @@ msgpack_register(PyObject *module, PyObject *args)
     module_state *state = NULL;
     Py_ssize_t len = PyTuple_GET_SIZE(args), i;
 
-    if (!(state = _PyModule_GetState(module))) {
+    if (!(state = __PyModule_GetState__(module))) {
         return NULL;
     }
     for (i = 0; i < len; ++i) {
@@ -57,7 +57,7 @@ msgpack_unpack(PyObject *module, PyObject *args)
 
     if (
         PyArg_ParseTuple(args, "y*:unpack", &msg) &&
-        (state = _PyModule_GetState(module))
+        (state = __PyModule_GetState__(module))
     ) {
         result = UnpackMessage(state->registry, &msg, &off);
         PyBuffer_Release(&msg);
@@ -82,12 +82,12 @@ msgpack_m_slots_exec(PyObject *module)
     module_state *state = NULL;
 
     if (
-        !(state = _PyModule_GetState(module)) ||
+        !(state = __PyModule_GetState__(module)) ||
         !(state->registry = PyDict_New()) ||
         RegisterObject(state->registry, Py_NotImplemented) ||
         RegisterObject(state->registry, Py_Ellipsis) ||
-        PyModule_AddStringConstant(module, "__version__", PKG_VERSION) ||
-        _PyModule_AddType(module, "Timestamp", &Timestamp_Type)
+        PyModule_AddType(module, &Timestamp_Type) ||
+        PyModule_AddStringConstant(module, "__version__", PKG_VERSION)
     ) {
         return -1;
     }
@@ -106,9 +106,11 @@ static struct PyModuleDef_Slot msgpack_m_slots[] = {
 static int
 msgpack_m_traverse(PyObject *module, visitproc visit, void *arg)
 {
+    printf("msgpack_m_traverse\n");
+
     module_state *state = NULL;
 
-    if (!(state = _PyModule_GetState(module))) {
+    if (!(state = __PyModule_GetState__(module))) {
         return -1;
     }
     Py_VISIT(state->registry);
@@ -120,9 +122,11 @@ msgpack_m_traverse(PyObject *module, visitproc visit, void *arg)
 static int
 msgpack_m_clear(PyObject *module)
 {
+    printf("msgpack_m_clear\n");
+
     module_state *state = NULL;
 
-    if (!(state = _PyModule_GetState(module))) {
+    if (!(state = __PyModule_GetState__(module))) {
         return -1;
     }
     Py_CLEAR(state->registry);
