@@ -448,8 +448,14 @@ __pack_array(PyObject *msg, Py_ssize_t len, const char *name)
 /* sequence ----------------------------------------------------------------- */
 
 static inline int
-__pack_sequence__(PyObject *msg, PyObject **items, Py_ssize_t len,
-                  const char *name, const char *where)
+__pack_sequence__(
+    PyObject *module,
+    PyObject *msg,
+    PyObject **items,
+    Py_ssize_t len,
+    const char *name,
+    const char *where
+)
 {
     Py_ssize_t i;
     int res = -1;
@@ -457,7 +463,7 @@ __pack_sequence__(PyObject *msg, PyObject **items, Py_ssize_t len,
     if (!Py_EnterRecursiveCall(where)) {
         if (!__pack_array(msg, len, name)) {
             for (res = 0, i = 0; i < len; ++i) {
-                if ((res = PackObject(msg, items[i]))) {
+                if ((res = PackObject(module, msg, items[i]))) {
                     break;
                 }
             }
@@ -467,7 +473,8 @@ __pack_sequence__(PyObject *msg, PyObject **items, Py_ssize_t len,
     return res;
 }
 
-#define __pack_sequence(m, i, l, n) __pack_sequence__(m, i, l, n, _Packing_(n))
+#define __pack_sequence(_mod_, m, i, l, n) \
+    __pack_sequence__(_mod_, m, i, l, n, _Packing_(n))
 
 
 /* dict --------------------------------------------------------------------- */
@@ -496,7 +503,7 @@ __pack_map(PyObject *msg, Py_ssize_t len)
 }
 
 static inline int
-__pack_dict(PyObject *msg, PyObject *obj)
+__pack_dict(PyObject *module, PyObject *msg, PyObject *obj)
 {
     Py_ssize_t pos = 0;
     PyObject *key = NULL, *val = NULL;
@@ -505,8 +512,8 @@ __pack_dict(PyObject *msg, PyObject *obj)
     if (!Py_EnterRecursiveCall(_Packing_("dict"))) {
         if (!__pack_map(msg, PyDict_GET_SIZE(obj))) {
             while ((res = PyDict_Next(obj, &pos, &key, &val))) {
-                if ((res = PackObject(msg, key)) ||
-                    (res = PackObject(msg, val))) {
+                if ((res = PackObject(module, msg, key)) ||
+                    (res = PackObject(module, msg, val))) {
                     break;
                 }
             }
@@ -581,24 +588,24 @@ _PyUnicode_Pack(PyObject *msg, PyObject *obj)
 
 /* PyTuple ------------------------------------------------------------------ */
 
-#define __pack_tuple(m, i, l) __pack_sequence(m, i, l, "tuple")
+#define __pack_tuple(_mod_, m, i, l) __pack_sequence(_mod_, m, i, l, "tuple")
 
 static int
-_PyTuple_Pack(PyObject *msg, PyObject *obj)
+_PyTuple_Pack(PyObject *module, PyObject *msg, PyObject *obj)
 {
     PyObject **items = _PyTuple_ITEMS(obj);
     Py_ssize_t len = PyTuple_GET_SIZE(obj);
 
-    return __pack_tuple(msg, items, len);
+    return __pack_tuple(module, msg, items, len);
 }
 
 
 /* PyDict ------------------------------------------------------------------- */
 
 static int
-_PyDict_Pack(PyObject *msg, PyObject *obj)
+_PyDict_Pack(PyObject *module, PyObject *msg, PyObject *obj)
 {
-    return __pack_dict(msg, obj);
+    return __pack_dict(module, msg, obj);
 }
 
 
@@ -661,8 +668,13 @@ __pack_extension(PyObject *msg, PyObject *data, uint8_t type, const char *name)
 /* anyset ------------------------------------------------------------------- */
 
 static inline int
-__pack_anyset__(PyObject *msg, PyObject *obj,
-                const char *name, const char *where)
+__pack_anyset__(
+    PyObject *module,
+    PyObject *msg,
+    PyObject *obj,
+    const char *name,
+    const char *where
+)
 {
     Py_ssize_t pos = 0;
     PyObject *item = NULL;
@@ -672,7 +684,7 @@ __pack_anyset__(PyObject *msg, PyObject *obj,
     if (!Py_EnterRecursiveCall(where)) {
         if (!__pack_array(msg, PySet_GET_SIZE(obj), name)) {
             while ((res = _PySet_NextEntry(obj, &pos, &item, &hash))) {
-                if ((res = PackObject(msg, item))) {
+                if ((res = PackObject(module, msg, item))) {
                     break;
                 }
             }
@@ -682,7 +694,8 @@ __pack_anyset__(PyObject *msg, PyObject *obj,
     return res;
 }
 
-#define __pack_anyset(m, o, n) __pack_anyset__(m, o, n, _Packing_(n))
+#define __pack_anyset(_mod_, m, o, n) \
+    __pack_anyset__(_mod_, m, o, n, _Packing_(n))
 
 
 /* class -------------------------------------------------------------------- */
@@ -801,21 +814,21 @@ __pack_timestamp(PyObject *obj)
 
 /* -------------------------------------------------------------------------- */
 
-#define __pack_ext_sequence(m, d, i, l, t, n) \
-    ((__pack_sequence(d, i, l, n)) ? -1 : __pack_extension(m, d, t, n))
+#define __pack_ext_sequence(_mod_, m, d, i, l, t, n) \
+    ((__pack_sequence(_mod_, d, i, l, n)) ? -1 : __pack_extension(m, d, t, n))
 
 
-#define __pack_ext_anyset(m, d, o, t, n) \
-    ((__pack_anyset(d, o, n)) ? -1 : __pack_extension(m, d, t, n))
+#define __pack_ext_anyset(_mod_, m, d, o, t, n) \
+    ((__pack_anyset(_mod_, d, o, n)) ? -1 : __pack_extension(m, d, t, n))
 
 
 /* PyList ------------------------------------------------------------------- */
 
-#define __pack_ext_list(m, d, i, l) \
-    __pack_ext_sequence(m, d, i, l, MSGPACK_EXT_PYLIST, "list")
+#define __pack_ext_list(_mod_, m, d, i, l) \
+    __pack_ext_sequence(_mod_, m, d, i, l, MSGPACK_EXT_PYLIST, "list")
 
 static int
-_PyList_Pack(PyObject *msg, PyObject *obj)
+_PyList_Pack(PyObject *module, PyObject *msg, PyObject *obj)
 {
     PyObject **items = _PyList_ITEMS(obj);
     Py_ssize_t len = PyList_GET_SIZE(obj);
@@ -823,7 +836,7 @@ _PyList_Pack(PyObject *msg, PyObject *obj)
     int res = -1;
 
     if ((data = NewMessage())) {
-        res = __pack_ext_list(msg, data, items, len);
+        res = __pack_ext_list(module, msg, data, items, len);
         Py_DECREF(data);
     }
     return res;
@@ -832,17 +845,17 @@ _PyList_Pack(PyObject *msg, PyObject *obj)
 
 /* PySet -------------------------------------------------------------------- */
 
-#define __pack_ext_set(m, d, o) \
-    __pack_ext_anyset(m, d, o, MSGPACK_EXT_PYSET, "set")
+#define __pack_ext_set(_mod_, m, d, o) \
+    __pack_ext_anyset(_mod_, m, d, o, MSGPACK_EXT_PYSET, "set")
 
 static int
-_PySet_Pack(PyObject *msg, PyObject *obj)
+_PySet_Pack(PyObject *module, PyObject *msg, PyObject *obj)
 {
     PyObject *data = NULL;
     int res = -1;
 
     if ((data = NewMessage())) {
-        res = __pack_ext_set(msg, data, obj);
+        res = __pack_ext_set(module, msg, data, obj);
         Py_DECREF(data);
     }
     return res;
@@ -851,17 +864,17 @@ _PySet_Pack(PyObject *msg, PyObject *obj)
 
 /* PyFrozenSet -------------------------------------------------------------- */
 
-#define __pack_ext_frozenset(m, d, o) \
-    __pack_ext_anyset(m, d, o, MSGPACK_EXT_PYFROZENSET, "frozenset")
+#define __pack_ext_frozenset(_mod_, m, d, o) \
+    __pack_ext_anyset(_mod_, m, d, o, MSGPACK_EXT_PYFROZENSET, "frozenset")
 
 static int
-_PyFrozenSet_Pack(PyObject *msg, PyObject *obj)
+_PyFrozenSet_Pack(PyObject *module, PyObject *msg, PyObject *obj)
 {
     PyObject *data = NULL;
     int res = -1;
 
     if ((data = NewMessage())) {
-        res = __pack_ext_frozenset(msg, data, obj);
+        res = __pack_ext_frozenset(module, msg, data, obj);
         Py_DECREF(data);
     }
     return res;
@@ -941,7 +954,7 @@ _Timestamp_Pack(PyObject *msg, PyObject *obj)
 /* PyObject ----------------------------------------------------------------- */
 
 static int
-_PyObject_Pack(PyObject *msg, PyObject *obj, const char *name)
+_PyObject_Pack(PyObject *module, PyObject *msg, PyObject *obj, const char *name)
 {
     PyObject *reduce = NULL, *data = NULL;
     uint8_t type = MSGPACK_EXT_INVALID; // 0
@@ -955,7 +968,7 @@ _PyObject_Pack(PyObject *msg, PyObject *obj, const char *name)
                 }
             }
             else if (PyTuple_CheckExact(reduce)) {
-                if (!_PyTuple_Pack(data, reduce)) {
+                if (!_PyTuple_Pack(module, data, reduce)) {
                     type = MSGPACK_EXT_PYOBJECT;
                 }
             }
@@ -982,18 +995,21 @@ _PyObject_Pack(PyObject *msg, PyObject *obj, const char *name)
 /* Extension ---------------------------------------------------------------- */
 
 static int
-_Extension_Pack(PyTypeObject *type, PyObject *msg, PyObject *obj)
+_Extension_Pack(
+    PyObject *module, PyTypeObject *type, PyObject *msg, PyObject *obj
+)
 {
+    module_state *state = NULL;
     int res = -1;
 
     if (type == &PyList_Type) {
-        res = _PyList_Pack(msg, obj);
+        res = _PyList_Pack(module, msg, obj);
     }
     else if (type == &PySet_Type) {
-        res = _PySet_Pack(msg, obj);
+        res = _PySet_Pack(module, msg, obj);
     }
     else if (type == &PyFrozenSet_Type) {
-        res = _PyFrozenSet_Pack(msg, obj);
+        res = _PyFrozenSet_Pack(module, msg, obj);
     }
     else if (type == &PyByteArray_Type) {
         res = _PyByteArray_Pack(msg, obj);
@@ -1004,11 +1020,13 @@ _Extension_Pack(PyTypeObject *type, PyObject *msg, PyObject *obj)
     else if (type == &PyComplex_Type) {
         res = _PyComplex_Pack(msg, obj);
     }
-    else if (type == &Timestamp_Type) {
-        res = _Timestamp_Pack(msg, obj);
-    }
-    else {
-        res = _PyObject_Pack(msg, obj, type->tp_name);
+    else if ((state = __PyModule_GetState__(module))) {
+        if (type == (PyTypeObject *)state->timestamp_type) {
+            res = _Timestamp_Pack(msg, obj);
+        }
+        else {
+            res = _PyObject_Pack(module, msg, obj, type->tp_name);
+        }
     }
     return res;
 }
@@ -1045,7 +1063,7 @@ RegisterObject(PyObject *registry, PyObject *obj)
 
 
 int
-PackObject(PyObject *msg, PyObject *obj)
+PackObject(PyObject *module, PyObject *msg, PyObject *obj)
 {
     PyTypeObject *type = Py_TYPE(obj);
     int res = -1;
@@ -1072,13 +1090,13 @@ PackObject(PyObject *msg, PyObject *obj)
         res = _PyUnicode_Pack(msg, obj);
     }
     else if (type == &PyTuple_Type) {
-        res = _PyTuple_Pack(msg, obj);
+        res = _PyTuple_Pack(module, msg, obj);
     }
     else if (type == &PyDict_Type) {
-        res = _PyDict_Pack(msg, obj);
+        res = _PyDict_Pack(module, msg, obj);
     }
     else {
-        res = _Extension_Pack(type, msg, obj);
+        res = _Extension_Pack(module, type, msg, obj);
     }
     return res;
 }

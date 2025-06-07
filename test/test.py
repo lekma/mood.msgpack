@@ -3,6 +3,7 @@ import datetime
 import math
 import pathlib
 import random
+import time
 import unittest
 
 import reference
@@ -53,7 +54,9 @@ class TestInstance(_TestCase_):
             (
                 datetime.datetime.now(),
                 datetime.datetime.today(),
-                pathlib.Path('.'),
+                msgpack.Timestamp.fromtimestamp(time.time()),
+                msgpack.Timestamp.fromtimestamp(-time.time()),
+                pathlib.Path("."),
             )
         )
 

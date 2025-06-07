@@ -375,15 +375,21 @@ __unpack_len__(Py_buffer *msg, Py_ssize_t *off)
 /* MSGPACK_EXT_TIMESTAMP ---------------------------------------------------- */
 
 static PyObject *
-_Timestamp_Unpack(Py_buffer *msg, Py_ssize_t *off, Py_ssize_t size)
+_Timestamp_Unpack(
+    PyObject *module, Py_buffer *msg, Py_ssize_t *off, Py_ssize_t size
+)
 {
+    module_state *state = NULL;
     const char *buffer = NULL;
     uint32_t nanoseconds = 0;
     int64_t seconds = 0;
     uint64_t value = 0;
     PyObject *result = NULL;
 
-    if ((buffer = __unpack_buffer(msg, off, size))) {
+    if (
+        (state = __PyModule_GetState__(module)) &&
+        (buffer = __unpack_buffer(msg, off, size))
+    ) {
         if (size == 4) {
             seconds = (int64_t)__unpack_uint4(buffer);
         }
@@ -399,7 +405,7 @@ _Timestamp_Unpack(Py_buffer *msg, Py_ssize_t *off, Py_ssize_t size)
         else {
             return _PyErr_InvalidSize_("timestamp", size);
         }
-        result = NewTimestamp(seconds, nanoseconds);
+        result = NewTimestamp(state->timestamp_type, seconds, nanoseconds);
     }
     return result;
 }
@@ -619,7 +625,7 @@ _Extension_Unpack(
             _PyErr_InvalidType_("extension", type);
             break;
         case MSGPACK_EXT_TIMESTAMP:
-            result = _Timestamp_Unpack(msg, off, size);
+            result = _Timestamp_Unpack(module, msg, off, size);
             break;
         case MSGPACK_EXT_PYCOMPLEX:
             result = _PyComplex_Unpack(msg, off, size);

@@ -14,7 +14,7 @@ msgpack_pack(PyObject *module, PyObject *obj)
 {
     PyObject *msg = NULL;
 
-    if ((msg = NewMessage()) && PackObject(msg, obj)) {
+    if ((msg = NewMessage()) && PackObject(module, msg, obj)) {
         Py_CLEAR(msg);
     }
     return msg;
@@ -82,7 +82,9 @@ msgpack_m_slots_exec(PyObject *module)
         !(state->registry = PyDict_New()) ||
         RegisterObject(state->registry, Py_NotImplemented) ||
         RegisterObject(state->registry, Py_Ellipsis) ||
-        PyModule_AddType(module, &Timestamp_Type) ||
+        _PyModule_AddTypeFromSpec(
+            module, &Timestamp_Spec, NULL, &state->timestamp_type
+        ) ||
         PyModule_AddStringConstant(module, "__version__", PKG_VERSION)
     ) {
         return -1;
@@ -102,13 +104,12 @@ static struct PyModuleDef_Slot msgpack_m_slots[] = {
 static int
 msgpack_m_traverse(PyObject *module, visitproc visit, void *arg)
 {
-    printf("msgpack_m_traverse\n");
-
     module_state *state = NULL;
 
     if (!(state = __PyModule_GetState__(module))) {
         return -1;
     }
+    Py_VISIT(state->timestamp_type);
     Py_VISIT(state->registry);
     return 0;
 }
@@ -118,13 +119,12 @@ msgpack_m_traverse(PyObject *module, visitproc visit, void *arg)
 static int
 msgpack_m_clear(PyObject *module)
 {
-    printf("msgpack_m_clear\n");
-
     module_state *state = NULL;
 
     if (!(state = __PyModule_GetState__(module))) {
         return -1;
     }
+    Py_CLEAR(state->timestamp_type);
     Py_CLEAR(state->registry);
     return 0;
 }

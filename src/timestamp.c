@@ -35,9 +35,10 @@ _Timestamp_New(PyTypeObject *type, int64_t seconds, uint32_t nanoseconds)
     Timestamp *self = NULL;
 
     if (nanoseconds < MSGPACK_NSECS_MAX) {
-        if ((self = (Timestamp *)type->tp_alloc(type, 0))) {
+        if ((self = PyObject_GC_NEW(Timestamp, type))) {
             self->seconds = seconds;
             self->nanoseconds = nanoseconds;
+            PyObject_GC_Track(self);
         }
     }
     else {
@@ -50,7 +51,7 @@ _Timestamp_New(PyTypeObject *type, int64_t seconds, uint32_t nanoseconds)
 
 
 static PyObject *
-_Timestamp_FromPyFloat(PyObject *timestamp)
+_Timestamp_FromPyFloat(PyObject *type, PyObject *timestamp)
 {
     static const double _int64_max_ = INT64_MAX; // INT64_MAX + 1
     static const double _int64_min_ = INT64_MIN;
@@ -70,19 +71,19 @@ _Timestamp_FromPyFloat(PyObject *timestamp)
         PyErr_SetString(PyExc_OverflowError, "timestamp out of range");
         return NULL;
     }
-    return NewTimestamp((int64_t)seconds, (uint32_t)nanoseconds);
+    return NewTimestamp(type, (int64_t)seconds, (uint32_t)nanoseconds);
 }
 
 
 static PyObject *
-_Timestamp_FromPyLong(PyObject *timestamp)
+_Timestamp_FromPyLong(PyObject *type, PyObject *timestamp)
 {
     int64_t seconds = 0;
 
     if (((seconds = PyLong_AsLongLong(timestamp)) == -1) && PyErr_Occurred()) {
         return NULL;
     }
-    return NewTimestamp(seconds, 0);
+    return NewTimestamp(type, seconds, 0);
 }
 
 
@@ -123,11 +124,51 @@ _Timestamp_Compare(Timestamp *self, Timestamp *other, int op)
 
 /* Timestamp_Type ----------------------------------------------------------- */
 
+/* Timestamp_Type.tp_new */
+static PyObject *
+Timestamp_tp_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+{
+    static char *kwlist[] = {"seconds", "nanoseconds", NULL};
+    int64_t seconds;
+    uint32_t nanoseconds = 0;
+
+    if (
+        !PyArg_ParseTupleAndKeywords(
+            args, kwargs, "L|I:__new__", kwlist, &seconds, &nanoseconds
+        )
+    ) {
+        return NULL;
+    }
+    return _Timestamp_New(type, seconds, nanoseconds);
+}
+
+
+/* Timestamp_Type.tp_traverse */
+static int
+Timestamp_tp_traverse(Timestamp *self, visitproc visit, void *arg)
+{
+    Py_VISIT(Py_TYPE(self)); // heap type
+    return 0;
+}
+
+
+/* Timestamp_Type.tp_clear */
+static int
+Timestamp_tp_clear(Timestamp *self)
+{
+    return 0;
+}
+
+
 /* Timestamp_Type.tp_dealloc */
 static void
 Timestamp_tp_dealloc(Timestamp *self)
 {
-    Py_TYPE(self)->tp_free((PyObject*)self);
+    PyObject_GC_UnTrack(self);
+    Timestamp_tp_clear(self);
+    PyTypeObject *type = Py_TYPE(self);
+    PyObject_GC_Del(self);
+    Py_XDECREF(type); // heap type
 }
 
 
@@ -146,7 +187,8 @@ Timestamp_tp_repr(Timestamp *self)
 static PyObject *
 Timestamp_tp_richcompare(Timestamp *self, PyObject *other, int op)
 {
-    if (Py_TYPE(other) == &Timestamp_Type) {
+    /*if (Py_TYPE(other) == &Timestamp_Type) {*/
+    if (Py_TYPE(self) == Py_TYPE(other)) {
         return _Timestamp_Compare(self, (Timestamp *)other, op);
     }
     Py_RETURN_NOTIMPLEMENTED;
@@ -159,15 +201,15 @@ PyDoc_STRVAR(Timestamp_fromtimestamp_doc,
 fromtimestamp(timestamp) -> Timestamp");
 
 static PyObject *
-Timestamp_fromtimestamp(PyObject *cls, PyObject *timestamp)
+Timestamp_fromtimestamp(PyObject *type, PyObject *timestamp)
 {
     PyObject *result = NULL;
 
     if (PyFloat_Check(timestamp)) {
-        result = _Timestamp_FromPyFloat(timestamp);
+        result = _Timestamp_FromPyFloat(type, timestamp);
     }
     else if (PyLong_Check(timestamp)) {
-        result = _Timestamp_FromPyLong(timestamp);
+        result = _Timestamp_FromPyLong(type, timestamp);
     }
     else {
         PyErr_Format(
@@ -220,37 +262,25 @@ static PyMemberDef Timestamp_tp_members[] = {
 };
 
 
-/* Timestamp_Type.tp_new */
-static PyObject *
-Timestamp_tp_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
-{
-    static char *kwlist[] = {"seconds", "nanoseconds", NULL};
-    int64_t seconds;
-    uint32_t nanoseconds = 0;
-
-    if (
-        !PyArg_ParseTupleAndKeywords(
-            args, kwargs, "L|I:__new__", kwlist, &seconds, &nanoseconds
-        )
-    ) {
-        return NULL;
-    }
-    return _Timestamp_New(type, seconds, nanoseconds);
-}
+static PyType_Slot Timestamp_Slots[] = {
+    {Py_tp_doc, "Timestamp(seconds[, nanoseconds=0])"},
+    {Py_tp_new, Timestamp_tp_new},
+    {Py_tp_traverse, Timestamp_tp_traverse},
+    {Py_tp_clear, Timestamp_tp_clear},
+    {Py_tp_dealloc, Timestamp_tp_dealloc},
+    {Py_tp_repr, Timestamp_tp_repr},
+    {Py_tp_richcompare, Timestamp_tp_richcompare},
+    {Py_tp_methods, Timestamp_tp_methods},
+    {Py_tp_members, Timestamp_tp_members},
+    {0, NULL}
+};
 
 
-PyTypeObject Timestamp_Type = {
-    PyVarObject_HEAD_INIT(NULL, 0)
-    .tp_name = "mood.msgpack.Timestamp",
-    .tp_basicsize = sizeof(Timestamp),
-    .tp_dealloc = (destructor)Timestamp_tp_dealloc,
-    .tp_repr = (reprfunc)Timestamp_tp_repr,
-    .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,
-    .tp_doc = "Timestamp(seconds[, nanoseconds=0])",
-    .tp_richcompare = (richcmpfunc)Timestamp_tp_richcompare,
-    .tp_methods = Timestamp_tp_methods,
-    .tp_members = Timestamp_tp_members,
-    .tp_new = Timestamp_tp_new,
+PyType_Spec Timestamp_Spec = {
+    .name = "mood.msgpack.Timestamp",
+    .basicsize = sizeof(Timestamp),
+    .flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_HAVE_GC,
+    .slots = Timestamp_Slots
 };
 
 
@@ -259,7 +289,7 @@ PyTypeObject Timestamp_Type = {
    -------------------------------------------------------------------------- */
 
 PyObject *
-NewTimestamp(int64_t seconds, uint32_t nanoseconds)
+NewTimestamp(PyObject *type, int64_t seconds, uint32_t nanoseconds)
 {
-    return _Timestamp_New(&Timestamp_Type, seconds, nanoseconds);
+    return _Timestamp_New((PyTypeObject *)type, seconds, nanoseconds);
 }

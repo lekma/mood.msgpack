@@ -53,24 +53,25 @@ typedef struct {
     uint32_t nanoseconds;
 } Timestamp;
 
-extern PyTypeObject Timestamp_Type;
+extern PyType_Spec Timestamp_Spec;
+
+PyObject *NewTimestamp(PyObject *type, int64_t seconds, uint32_t nanoseconds);
 
 
 /* module state */
 typedef struct {
     PyObject *registry;
+    PyObject *timestamp_type;
 } module_state;
 
 
 /* interface */
 PyObject *NewMessage(void);
 int RegisterObject(PyObject *registry, PyObject *obj);
-int PackObject(PyObject *msg, PyObject *obj);
+int PackObject(PyObject *module, PyObject *msg, PyObject *obj);
 
 PyObject *__PyObject_New(PyObject *reduce);
 PyObject *UnpackMessage(PyObject *module, Py_buffer *msg, Py_ssize_t *off);
-
-PyObject *NewTimestamp(int64_t seconds, uint32_t nanoseconds);
 
 
 /* --------------------------------------------------------------------------

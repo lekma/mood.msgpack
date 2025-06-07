@@ -1,6 +1,8 @@
 from enum import IntEnum, IntFlag, unique
 from struct import pack as __pack__
 
+from mood.msgpack import Timestamp
+
 
 # ------------------------------------------------------------------------------
 
@@ -314,6 +316,14 @@ def pack_dict(o):
 
 # ------------------------------------------------------------------------------
 
+def pack_timestamp(o):
+    if ((o.seconds >> 34) == 0):
+        v = ((o.nanoseconds << 34) | o.seconds)
+        if ((v & 0xffffffff00000000) == 0):
+            return __pack__(">I", v)
+        return __pack__(">Q", v)
+    return b"".join((__pack__(">I", o.nanoseconds), __pack__(">q", o.seconds)))
+
 def pack_complex(o):
     return b"".join((__pack__(">d", v) for v in (o.real, o.imag)))
 
@@ -341,7 +351,7 @@ _extension_types_ = {
     bytearray: lambda o: (Extensions.PYTHON_BYTEARRAY, o),
     type: lambda o: (Extensions.PYTHON_CLASS, pack_class(o)),
     complex: lambda o: (Extensions.PYTHON_COMPLEX, pack_complex(o)),
-    #Timestamp: lambda o: (Extensions.MSGPACK_TIMESTAMP, pack_timestamp(o))
+    Timestamp: lambda o: (Extensions.MSGPACK_TIMESTAMP, pack_timestamp(o))
 }
 
 def pack_extension(o):
